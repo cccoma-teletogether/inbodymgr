@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InBody Manager — 체성분 관리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:        #0F172A;
+    --surface:   #1E293B;
+    --surface2:  #263348;
+    --border:    #334155;
+    --green:     #10B981;
+    --green-dim: #064E3B;
+    --amber:     #F59E0B;
+    --red:       #EF4444;
+    --blue:      #3B82F6;
+    --text:      #E2E8F0;
+    --muted:     #94A3B8;
+    --radius:    12px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15,23,42,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; height: 56px;
+  }
+  .nav-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+  .logo-dot { width: 10px; height: 10px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab {
+    padding: 6px 14px; border-radius: 8px; border: none;
+    background: transparent; color: var(--muted);
+    cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500;
+    transition: all .2s;
+  }
+  .nav-tab:hover { color: var(--text); background: var(--surface); }
+  .nav-tab.active { background: var(--green); color: #fff; }
+  .nav-actions { display: flex; gap: 8px; }
+  .btn {
+    padding: 7px 14px; border-radius: 8px; border: none;
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: #0ea472; }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+
+  /* ── PAGES ── */
+  .page { display: none; padding: 24px 20px; max-width: 1200px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* ── DASHBOARD GRID ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent, var(--green));
+  }
+  .stat-label { font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 600; line-height: 1; }
+  .stat-unit { font-size: 13px; color: var(--muted); margin-left: 3px; }
+  .stat-delta { font-size: 12px; margin-top: 6px; }
+  .delta-up { color: var(--red); }
+  .delta-dn { color: var(--green); }
+  .delta-eq { color: var(--muted); }
+
+  /* ── COMPOSITION BAR ── */
+  .comp-bar-wrap { margin: 16px 0; }
+  .comp-bar {
+    height: 28px; border-radius: 6px; overflow: hidden;
+    display: flex; position: relative;
+  }
+  .comp-seg { height: 100%; transition: width .6s cubic-bezier(.4,0,.2,1); }
+  .comp-legend {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ── CHART ROW ── */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .chart-full { grid-column: 1 / -1; }
+  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .chart-title { font-size: 13px; font-weight: 600; }
+  .range-btns { display: flex; gap: 4px; }
+  .range-btn {
+    padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .range-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+
+  /* ── FORM ── */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 12px; font-weight: 500; color: var(--muted); }
+  input, select, textarea {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    padding: 10px 12px; transition: border .2s; width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--green);
+  }
+  select option { background: var(--surface); }
+  .form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 11px 12px; border-bottom: 1px solid rgba(51,65,85,.5); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag-ok { background: var(--green-dim); color: var(--green); }
+  .tag-warn { background: rgba(245,158,11,.15); color: var(--amber); }
+  .tag-bad { background: rgba(239,68,68,.15); color: var(--red); }
+
+  /* ── CHANGELOG ── */
+  .cl-entry { padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .cl-entry:last-child { border-bottom: none; }
+  .cl-date { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+  .cl-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .cl-items { padding-left: 18px; }
+  .cl-items li { font-size: 13px; color: var(--muted); line-height: 1.8; }
+  .cl-badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-right: 6px; text-transform: uppercase; }
+  .badge-feat { background: rgba(59,130,246,.2); color: var(--blue); }
+  .badge-fix  { background: rgba(239,68,68,.2);  color: var(--red);  }
+  .badge-ui   { background: rgba(245,158,11,.2); color: var(--amber);}
+  .badge-data { background: rgba(16,185,129,.2); color: var(--green);}
+
+  /* ── SETTINGS ── */
+  .settings-section { margin-bottom: 24px; }
+  .settings-title { font-size: 13px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px; }
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+  .toggle-label h4 { font-size: 13px; font-weight: 500; }
+  .toggle-label p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .toggle { position: relative; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--border); border-radius: 24px; transition: .3s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--green); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+
+  /* ── EDIT MODAL ── */
+  .edit-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); z-index:300; align-items:center; justify-content:center; padding:20px; }
+  .edit-modal-bg.open { display:flex; }
+  .edit-modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; }
+  .edit-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+  .edit-modal-title { font-size:16px; font-weight:700; }
+
+  /* ── GOAL PROGRESS ── */
+  .goal-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:16px; }
+  .goal-row { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+  .goal-row:last-child { margin-bottom:0; }
+  .goal-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .goal-info { flex:1; min-width:0; }
+  .goal-label { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .goal-values { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .goal-current { font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; }
+  .goal-target { font-size:12px; color:var(--muted); }
+  .goal-remaining { font-size:12px; font-weight:600; }
+  .goal-bar-track { height:6px; background:var(--surface2); border-radius:4px; overflow:hidden; margin-top:8px; }
+  .goal-bar-fill { height:100%; border-radius:4px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+  .goal-pct { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; flex-shrink:0; min-width:42px; text-align:right; }
+
+  /* ── INSIGHT ── */
+  .insight-card { background:linear-gradient(135deg, rgba(16,185,129,.08), rgba(59,130,246,.06)); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:16px; }
+  .insight-head { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+  .insight-item { display:flex; align-items:flex-start; gap:8px; font-size:13px; line-height:1.7; color:var(--text); margin-bottom:6px; }
+  .insight-item:last-child { margin-bottom:0; }
+  .insight-emoji { flex-shrink:0; }
+
+  /* ── DERIVED VALUES ── */
+  .derived-section { margin-top:14px; border-top:1px solid var(--border); padding-top:14px; }
+  .derived-title { font-size:11px; font-weight:700; color:var(--amber); text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+  .derived-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:8px; }
+  .derived-field { background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.2); border-radius:8px; padding:10px 12px; }
+  .derived-field .scan-field-label { color:var(--amber); }
+  .derived-field .scan-field-value { color:var(--amber); font-size:14px; }
+  .derived-badge { display:inline-block; font-size:10px; background:rgba(245,158,11,.2); color:var(--amber); border-radius:4px; padding:1px 6px; font-weight:700; }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .empty p { font-size: 13px; line-height: 1.7; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--surface2); border: 1px solid var(--green);
+    color: var(--text); padding: 12px 20px; border-radius: 10px;
+    font-size: 13px; font-weight: 500; z-index: 999;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .chart-grid { grid-template-columns: 1fr; }
+    .nav-tabs { display: none; }
+    .mobile-menu { display: block; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    nav { padding: 0 14px; }
+    .page { padding: 16px 14px; }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .stat-value { font-size: 22px; }
+  }
+  @media (min-width: 641px) { .mobile-menu { display: none; } }
+
+  .mobile-menu {
+    background: none; border: 1px solid var(--border);
+    color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 18px;
+  }
+  .mobile-nav {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(15,23,42,.96); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    padding: 8px 0 env(safe-area-inset-bottom);
+  }
+  .mobile-nav.open { display: flex; justify-content: space-around; }
+  .mobile-nav-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: none; border: none; color: var(--muted);
+    font-family: inherit; font-size: 10px; font-weight: 500; cursor: pointer;
+    padding: 8px 12px;
+  }
+  .mobile-nav-btn.active { color: var(--green); }
+  .mobile-nav-btn span { font-size: 20px; }
+
+  /* ── IMAGE SCAN ── */
+  .scan-drop {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 32px 20px; text-align: center; cursor: pointer;
+    transition: all .2s; position: relative; overflow: hidden;
+  }
+  .scan-drop:hover, .scan-drop.drag-over {
+    border-color: var(--green); background: rgba(16,185,129,.05);
+  }
+  .scan-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .scan-icon { font-size: 36px; margin-bottom: 10px; }
+  .scan-preview {
+    width: 100%; max-height: 280px; object-fit: contain;
+    border-radius: 8px; margin: 12px 0; display: none;
+    border: 1px solid var(--border);
+  }
+  .scan-result {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-top: 16px; display: none;
+  }
+  .scan-result-title { font-size: 12px; font-weight: 600; color: var(--green); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 12px; }
+  .scan-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+  .scan-field { background: var(--surface); border-radius: 8px; padding: 10px 12px; }
+  .scan-field-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .scan-field-value { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; color: var(--green); }
+  .scan-field-value.missing { color: var(--border); }
+  .analyzing { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; padding: 16px 0; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .api-key-notice { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--amber); margin-bottom: 16px; line-height: 1.6; }
+  .api-key-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .api-key-row input { font-size: 12px; padding: 7px 10px; flex: 1; }
+
+  /* Target weight line */
+  .target-info { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .target-line { width: 24px; height: 2px; background: var(--amber); border-top: 2px dashed var(--amber); }
+
+  /* BMI meter */
+  .bmi-track { height: 8px; border-radius: 4px; overflow: hidden; display: flex; gap: 2px; margin: 8px 0; }
+  .bmi-seg { height: 100%; flex: 1; }
+  .bmi-indicator { position: relative; }
+  .bmi-needle { position: absolute; top: -2px; width: 4px; height: 12px; background: white; border-radius: 2px; transform: translateX(-50%); transition: left .6s cubic-bezier(.4,0,.2,1); box-shadow: 0 0 6px rgba(255,255,255,.5); }
+  .bmi-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  @keyframes slideUp {
+    from { transform:translateX(-50%) translateY(20px); opacity:0; }
+    to   { transform:translateX(-50%) translateY(0);    opacity:1; }
+  }
+</style>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="InBody">
+<meta name="theme-color" content="#0F172A">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo"><div class="logo-dot"></div> InBody Manager</div>
+  <div class="nav-tabs" id="navTabs">
+    <button class="nav-tab active" onclick="showPage('dashboard')">대시보드</button>
+    <button class="nav-tab" onclick="showPage('record')">측정 입력</button>
+    <button class="nav-tab" onclick="showPage('history')">기록 목록</button>
+    <button class="nav-tab" onclick="showPage('charts')">그래프</button>
+    <button class="nav-tab" onclick="showPage('settings')">설정</button>
+    <button class="nav-tab" onclick="showPage('changelog')">변경 이력</button>
+  </div>
+  <div class="nav-actions">
+    <button class="btn btn-primary" onclick="openModal()">+ 측정 추가</button>
+    <button class="mobile-menu" onclick="toggleMobileMenu()">☰</button>
+  </div>
+</nav>
+
+<!-- MOBILE NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-btn active" onclick="showPage('dashboard');closeMobileMenu()"><span>📊</span>대시보드</button>
+  <button class="mobile-nav-btn" onclick="showPage('record');closeMobileMenu()"><span>✏️</span>입력</button>
+  <button class="mobile-nav-btn" onclick="showPage('history');closeMobileMenu()"><span>📋</span>기록</button>
+  <button class="mobile-nav-btn" onclick="showPage('charts');closeMobileMenu()"><span>📈</span>그래프</button>
+  <button class="mobile-nav-btn" onclick="showPage('settings');closeMobileMenu()"><span>⚙️</span>설정</button>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: DASHBOARD -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-size:22px;font-weight:700;" id="dash-greeting">안녕하세요 👋</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px;" id="dash-subtitle">최근 측정 결과를 분석했습니다</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:11px;color:var(--muted);">마지막 측정</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--green);" id="dash-last-date">—</div>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stat-grid" id="statGrid"></div>
+
+  <!-- COMPOSITION BAR -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">체성분 구성비</div>
+    <div class="comp-bar-wrap">
+      <div class="comp-bar" id="compBar">
+        <div class="comp-seg" id="seg-muscle" style="background:#10B981;"></div>
+        <div class="comp-seg" id="seg-fat"    style="background:#F59E0B;"></div>
+        <div class="comp-seg" id="seg-bone"   style="background:#3B82F6;"></div>
+        <div class="comp-seg" id="seg-water"  style="background:#0EA5E9;"></div>
+        <div class="comp-seg" id="seg-other"  style="background:#475569;"></div>
+      </div>
+      <div class="comp-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#10B981;"></div><span id="leg-muscle">근육량 —</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#F59E0B;"></div><span id="leg-fat">체지방 —</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3B82F6;"></div><span id="leg-bone">골격근량 —</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#0EA5E9;"></div><span id="leg-water">체수분 —</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#475569;"></div><span id="leg-other">기타 —</span></div>
+      </div>
+    </div>
+
+    <!-- BMI -->
+    <div style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:12px;color:var(--muted);">BMI 지수</span>
+        <span id="bmi-value" style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;"></span>
+      </div>
+      <div class="bmi-indicator">
+        <div class="bmi-track">
+          <div class="bmi-seg" style="background:#3B82F6;"></div>
+          <div class="bmi-seg" style="background:#10B981;"></div>
+          <div class="bmi-seg" style="background:#10B981;"></div>
+          <div class="bmi-seg" style="background:#F59E0B;"></div>
+          <div class="bmi-seg" style="background:#EF4444;"></div>
+        </div>
+        <div class="bmi-needle" id="bmiNeedle"></div>
+      </div>
+      <div class="bmi-labels">
+        <span>저체중</span><span>정상</span><span>과체중</span><span>비만</span><span>고도비만</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GOAL PROGRESS -->
+  <div id="goalSection"></div>
+
+  <!-- INSIGHT -->
+  <div id="insightSection"></div>
+
+  <!-- MINI CHART -->
+  <div class="chart-grid">
+    <div class="chart-box">
+      <div class="chart-header">
+        <span class="chart-title">체중 추이</span>
+        <div class="range-btns">
+          <button class="range-btn active" onclick="setDashRange(7,this)">7일</button>
+          <button class="range-btn" onclick="setDashRange(30,this)">30일</button>
+          <button class="range-btn" onclick="setDashRange(0,this)">전체</button>
+        </div>
+      </div>
+      <canvas id="miniWeightChart" height="140"></canvas>
+      <div class="target-info" id="targetInfo" style="display:none;">
+        <div class="target-line"></div>
+        <span id="targetLabel">목표 체중</span>
+      </div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-header"><span class="chart-title">체지방률 추이</span></div>
+      <canvas id="miniFatChart" height="140"></canvas>
+    </div>
+  </div>
+
+  <div id="emptyDash" class="empty" style="display:none;">
+    <div class="empty-icon">📏</div>
+    <h3>아직 측정 기록이 없습니다</h3>
+    <p>상단의 <strong>+ 측정 추가</strong> 버튼을 눌러<br>첫 번째 체성분 측정값을 입력해 보세요.</p>
+    <button class="btn btn-primary" style="margin:20px auto 0;display:flex;" onclick="openModal()">첫 측정 입력하기</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: RECORD -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page" id="page-record">
+  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">측정값 입력</div>
+
+  <!-- IMAGE SCAN CARD -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">📷 앱 캡처 이미지로 자동 입력 <span style="font-size:10px;background:rgba(16,185,129,.15);color:var(--green);padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:700;">무료 · 로컬 처리</span></div>
+
+    <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7;">
+      🔒 브라우저 OCR(Tesseract.js)로 이미지를 로컬에서만 처리합니다. 인터넷 전송 없음 · 완전 무료
+    </div>
+
+    <!-- 드롭존 -->
+    <div class="scan-drop" id="scanDrop" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+      <input type="file" id="scanFileInput" accept="image/*" onchange="onScanFileChange(event)">
+      <div class="scan-icon" id="scanDropIcon">🖼️</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px;" id="scanDropTitle">이미지를 여기에 드래그하거나 클릭하여 선택</div>
+      <div style="font-size:12px;color:var(--muted);">Zepp / 갤럭시워치 / TANITA / InBody 앱 캡처 이미지 지원</div>
+    </div>
+
+    <!-- 미리보기 + 재시도 버튼 행 -->
+    <div id="scanPreviewRow" style="display:none;margin-top:12px;">
+      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <img id="scanPreview" class="scan-preview" style="display:block;margin:0;width:120px;height:auto;flex-shrink:0;" alt="미리보기">
+        <div style="flex:1;min-width:140px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px;" id="scanFileName"></div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-primary" id="btnRetry" onclick="retryOCR()" style="display:none;">
+              🔄 다시 인식
+            </button>
+            <label class="btn btn-ghost" style="cursor:pointer;display:flex;justify-content:center;">
+              🖼️ 다른 이미지 선택
+              <input type="file" accept="image/*" style="display:none" onchange="onScanFileChange(event)">
+            </label>
+            <button class="btn btn-ghost" onclick="resetScan()">✕ 취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 분석 중 -->
+    <div class="analyzing" id="scanAnalyzing" style="display:none;margin-top:12px;">
+      <div class="spinner"></div>
+      <div style="flex:1;">
+        <div id="scanStatus" style="font-size:13px;margin-bottom:6px;">OCR 엔진 초기화 중...</div>
+        <div style="height:4px;background:var(--surface2);border-radius:4px;overflow:hidden;">
+          <div id="scanProgress" style="height:100%;background:var(--green);border-radius:4px;width:0%;transition:width .4s;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오류 -->
+    <div id="scanError" style="display:none;margin-top:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:14px 16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:6px;" id="scanErrorTitle">❌ OCR 인식 실패</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;" id="scanErrorMsg"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="retryOCR()">🔄 다시 시도</button>
+        <label class="btn btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          🖼️ 다른 이미지
+          <input type="file" accept="image/*" style="display:none" onchange="onScanFileChange(event)">
+        </label>
+        <button class="btn btn-ghost" onclick="resetScan()">✕ 취소</button>
+      </div>
+    </div>
+
+    <!-- 인식 성공 -->
+    <div class="scan-result" id="scanResult" style="display:none;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <div class="scan-result-title" style="margin:0;" id="scanResultTitle">✓ OCR 인식 완료</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="retryOCR()">🔄 재인식</button>
+          <label class="btn btn-ghost" style="font-size:12px;padding:5px 10px;cursor:pointer;">
+            🖼️ 다른 이미지<input type="file" accept="image/*" style="display:none" onchange="onScanFileChange(event)">
+          </label>
+        </div>
+      </div>
+      <div class="scan-fields" id="scanFields"></div>
+      <!-- 환산값 섹션 -->
+      <div class="derived-section" id="derivedSection" style="display:none;">
+        <div class="derived-title">🧮 <span>환산 계산값 <span class="derived-badge">자동계산</span></span></div>
+        <div class="derived-grid" id="derivedFields"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="applyScanResult()">📋 폼에 적용 (인식+환산)</button>
+        <button class="btn btn-ghost" onclick="resetScan()">✕ 처음부터</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">⚠️ OCR 인식값은 저장 전 반드시 확인하세요. 환산값은 표준 공식 기반 추정치입니다.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">기본 정보</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>측정 날짜 *</label>
+        <input type="date" id="r-date">
+      </div>
+      <div class="form-group">
+        <label>체중 (kg) *</label>
+        <input type="number" id="r-weight" placeholder="70.5" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>체지방률 (%)</label>
+        <input type="number" id="r-fat-pct" placeholder="20.0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>체지방량 (kg)</label>
+        <input type="number" id="r-fat-kg" placeholder="14.0" step="0.1">
+      </div>
+    </div>
+
+    <div class="card-title" style="margin-top:24px;">체성분 상세</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>근육량 (kg)</label>
+        <input type="number" id="r-muscle" placeholder="55.0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>골격근량 (kg)</label>
+        <input type="number" id="r-skeletal" placeholder="32.0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>체수분 (L)</label>
+        <input type="number" id="r-water" placeholder="42.0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>기초대사량 (kcal)</label>
+        <input type="number" id="r-bmr" placeholder="1650" step="1">
+      </div>
+    </div>
+
+    <div class="card-title" style="margin-top:24px;">추가 측정</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>허리둘레 (cm)</label>
+        <input type="number" id="r-waist" placeholder="82" step="0.5">
+      </div>
+      <div class="form-group">
+        <label>내장지방 레벨</label>
+        <input type="number" id="r-visceral" placeholder="5" step="1">
+      </div>
+      <div class="form-group">
+        <label>체성분 점수</label>
+        <input type="number" id="r-score" placeholder="75" step="1">
+      </div>
+      <div class="form-group">
+        <label>메모</label>
+        <input type="text" id="r-note" placeholder="운동 후, 공복 등">
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveRecord()">💾 저장</button>
+      <button class="btn btn-ghost" onclick="clearForm()">초기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: HISTORY -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page" id="page-history">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div style="font-size:20px;font-weight:700;">측정 기록</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost" onclick="exportData()">📤 내보내기</button>
+      <label class="btn btn-ghost" style="cursor:pointer;">
+        📥 가져오기
+        <input type="file" accept=".json" style="display:none" onchange="importData(event)">
+      </label>
+      <button class="btn btn-danger" onclick="clearAllData()">🗑️ 전체 삭제</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th>체중(kg)</th>
+            <th>체지방(%)</th>
+            <th>근육량(kg)</th>
+            <th>체수분(L)</th>
+            <th>BMI</th>
+            <th>상태</th>
+            <th>메모</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="historyTbody"></tbody>
+      </table>
+      <div id="historyEmpty" class="empty" style="display:none;">
+        <div class="empty-icon">📋</div>
+        <h3>기록이 없습니다</h3>
+        <p>측정값을 입력하거나 JSON 파일을 가져오세요.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: CHARTS -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page" id="page-charts">
+  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">상세 그래프</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+    <button class="range-btn active" onclick="setChartsRange(7,this)">7일</button>
+    <button class="range-btn" onclick="setChartsRange(14,this)">14일</button>
+    <button class="range-btn" onclick="setChartsRange(30,this)">30일</button>
+    <button class="range-btn" onclick="setChartsRange(90,this)">3개월</button>
+    <button class="range-btn" onclick="setChartsRange(0,this)">전체</button>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-box chart-full"><div class="chart-title" style="margin-bottom:14px;">체중 변화</div><canvas id="weightChart" height="120"></canvas></div>
+    <div class="chart-box chart-full"><div class="chart-title" style="margin-bottom:14px;">체지방률 / 근육량</div><canvas id="fatMuscleChart" height="120"></canvas></div>
+    <div class="chart-box"><div class="chart-title" style="margin-bottom:14px;">체수분량</div><canvas id="waterChart" height="150"></canvas></div>
+    <div class="chart-box"><div class="chart-title" style="margin-bottom:14px;">기초대사량</div><canvas id="bmrChart" height="150"></canvas></div>
+    <div class="chart-box chart-full"><div class="chart-title" style="margin-bottom:14px;">허리둘레 / 내장지방</div><canvas id="waistChart" height="100"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: SETTINGS -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page" id="page-settings">
+  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">설정</div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="settings-section">
+      <div class="settings-title">프로필</div>
+      <div class="form-grid">
+        <div class="form-group"><label>이름</label><input type="text" id="s-name" placeholder="홍길동"></div>
+        <div class="form-group"><label>성별</label>
+          <select id="s-gender"><option value="">선택</option><option value="M">남성</option><option value="F">여성</option></select>
+        </div>
+        <div class="form-group"><label>생년월일</label><input type="date" id="s-birth"></div>
+        <div class="form-group"><label>신장 (cm)</label><input type="number" id="s-height" placeholder="170" step="0.5"></div>
+        <div class="form-group"><label>목표 체중 (kg)</label><input type="number" id="s-target-weight" placeholder="65" step="0.5"></div>
+        <div class="form-group"><label>목표 체지방률 (%)</label><input type="number" id="s-target-fat" placeholder="18" step="0.5"></div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">알림 / 표시</div>
+      <div class="toggle-row">
+        <div class="toggle-label"><h4>목표 체중 라인 표시</h4><p>그래프에 목표값 기준선을 표시합니다</p></div>
+        <label class="toggle"><input type="checkbox" id="s-show-target" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-label"><h4>BMI 자동 계산</h4><p>신장 기반으로 BMI를 자동 계산합니다</p></div>
+        <label class="toggle"><input type="checkbox" id="s-auto-bmi" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-label"><h4>변화량 표시</h4><p>이전 측정 대비 변화량을 대시보드에 표시합니다</p></div>
+        <label class="toggle"><input type="checkbox" id="s-show-delta" checked><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveSettings()">설정 저장</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title">데이터 관리</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-ghost" onclick="exportData()">📤 JSON 내보내기</button>
+      <label class="btn btn-ghost" style="cursor:pointer;">📥 JSON 가져오기<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+      <button class="btn btn-ghost" onclick="exportCSV()">📄 CSV 내보내기</button>
+      <button class="btn btn-danger" onclick="clearAllData()">🗑️ 모든 데이터 삭제</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px;" id="data-stats"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📲 앱 설치 (PWA)</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:14px;">
+      홈화면에 추가하면 앱처럼 빠르게 실행되고, 인터넷 없이도 기본 기능을 사용할 수 있습니다.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="triggerInstall()">📲 홈화면에 설치</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.7;">
+      • Android Chrome: 위 버튼 클릭<br>
+      • iPhone/iPad: Safari → 공유(□↑) → 홈 화면에 추가<br>
+      • PC Chrome/Edge: 주소창 오른쪽 설치 아이콘 클릭
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PAGE: CHANGELOG -->
+<!-- ══════════════════════════════════════════ -->
+<div class="page" id="page-changelog">
+  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">변경 이력 (Changelog)</div>
+  <div class="card">
+    <div id="changelogContent"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+
+<!-- ══════════════════════════════════════════ -->
+<!-- EDIT MODAL: 기록 수정 -->
+<!-- ══════════════════════════════════════════ -->
+<div class="edit-modal-bg" id="editModalBg">
+  <div class="edit-modal">
+    <div class="edit-modal-header">
+      <div class="edit-modal-title">✏️ 기록 수정</div>
+      <button class="modal-close" onclick="closeEditModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;">✕</button>
+    </div>
+    <input type="hidden" id="e-id">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="form-group" style="grid-column:1/-1;"><label>측정 날짜 *</label><input type="date" id="e-date"></div>
+      <div class="form-group"><label>체중 (kg) *</label><input type="number" id="e-weight" step="0.1"></div>
+      <div class="form-group"><label>체지방률 (%)</label><input type="number" id="e-fat-pct" step="0.1"></div>
+      <div class="form-group"><label>체지방량 (kg)</label><input type="number" id="e-fat-kg" step="0.1"></div>
+      <div class="form-group"><label>근육량 (kg)</label><input type="number" id="e-muscle" step="0.1"></div>
+      <div class="form-group"><label>골격근량 (kg)</label><input type="number" id="e-skeletal" step="0.1"></div>
+      <div class="form-group"><label>체수분 (L)</label><input type="number" id="e-water" step="0.1"></div>
+      <div class="form-group"><label>기초대사량</label><input type="number" id="e-bmr"></div>
+      <div class="form-group"><label>허리둘레 (cm)</label><input type="number" id="e-waist" step="0.5"></div>
+      <div class="form-group"><label>내장지방 레벨</label><input type="number" id="e-visceral"></div>
+      <div class="form-group"><label>바디 점수</label><input type="number" id="e-score"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>메모</label><input type="text" id="e-note"></div>
+    </div>
+    <div class="form-actions" style="margin-top:20px;">
+      <button class="btn btn-primary" onclick="saveEditRecord()">💾 수정 저장</button>
+      <button class="btn btn-ghost" onclick="closeEditModal()">취소</button>
+      <button class="btn btn-danger" style="margin-left:auto;" onclick="deleteFromEdit()">🗑️ 삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast">저장되었습니다 ✓</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// DATA LAYER
+// ══════════════════════════════════════════════════
+var RECORDS_KEY = 'inbody_records';
+var SETTINGS_KEY = 'inbody_settings';
+
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || []; }
+  catch { return []; }
+}
+function saveRecords(arr) {
+  arr.sort((a,b) => a.date.localeCompare(b.date));
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(arr));
+}
+function loadSettings() {
+  var defaults = {
+    name:'', gender:'', birth:'', height:'', targetWeight:'', targetFat:'',
+    showTarget:true, autoBMI:true, showDelta:true
+  };
+  try { return Object.assign(defaults, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); }
+  catch { return defaults; }
+}
+function getFieldVal(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : '';
+}
+function saveSettingsData(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+// ══════════════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════════════
+var currentPage = 'dashboard';
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-btn').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  var tabs = document.querySelectorAll('.nav-tab');
+  var pages = ['dashboard','record','history','charts','settings','changelog'];
+  var idx = pages.indexOf(id);
+  if (idx >= 0 && tabs[idx]) tabs[idx].classList.add('active');
+  var mbtns = document.querySelectorAll('.mobile-nav-btn');
+  var mPages = ['dashboard','record','history','charts','settings'];
+  var midx = mPages.indexOf(id);
+  if (midx >= 0 && mbtns[midx]) mbtns[midx].classList.add('active');
+  currentPage = id;
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'history') renderHistory();
+  if (id === 'charts') renderCharts(chartsRange);
+  if (id === 'settings') loadSettingsUI();
+  if (id === 'changelog') renderChangelog();
+  if (id === 'record') setTodayDate();
+}
+
+function toggleMobileMenu() {
+  document.getElementById('mobileNav').classList.toggle('open');
+}
+function closeMobileMenu() {
+  document.getElementById('mobileNav').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════
+// MODAL → record page (통합)
+// ══════════════════════════════════════════════════
+function openModal() {
+  showPage('record');
+  closeMobileMenu();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ══════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════
+function todayStr() {
+  return new Date().toISOString().slice(0,10);
+}
+function formatDate(d) {
+  if (!d) return '—';
+  var dt = new Date(d);
+  return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
+}
+function calcBMI(weight, heightCm) {
+  if (!weight || !heightCm) return null;
+  return (weight / Math.pow(heightCm/100, 2)).toFixed(1);
+}
+function bmiStatus(bmi) {
+  if (!bmi) return null;
+  bmi = parseFloat(bmi);
+  if (bmi < 18.5) return {label:'저체중', cls:'tag-warn'};
+  if (bmi < 23)   return {label:'정상',   cls:'tag-ok'};
+  if (bmi < 25)   return {label:'과체중', cls:'tag-warn'};
+  if (bmi < 30)   return {label:'비만',   cls:'tag-bad'};
+  return {label:'고도비만', cls:'tag-bad'};
+}
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+function deltaHTML(val, prev, reverse) {
+  if (prev == null || val == null) return '';
+  var d = (val - prev).toFixed(1);
+  if (Math.abs(d) < 0.05) return '<span class="stat-delta delta-eq">변화 없음</span>';
+  var up = d > 0;
+  var good = reverse ? !up : up;
+  var cls = good ? 'delta-dn' : 'delta-up';
+  var arrow = up ? '▲' : '▼';
+  return `<span class="stat-delta ${cls}">${arrow} ${Math.abs(d)}</span>`;
+}
+function v(id) { var _el=document.getElementById(id); return _el ? _el.value : ''; }
+function n(id) { var x = parseFloat(v(id)); return isNaN(x) ? null : x; }
+
+// ══════════════════════════════════════════════════
+// SAVE RECORD
+// ══════════════════════════════════════════════════
+function buildRecord(prefix) {
+  var date = document.getElementById(prefix+'-date').value;
+  var weight = parseFloat(document.getElementById(prefix+'-weight').value);
+  if (!date || isNaN(weight)) { toast('날짜와 체중은 필수입니다'); return null; }
+  var s = loadSettings();
+  var bmi = s.autoBMI && s.height ? calcBMI(weight, s.height) : null;
+  return {
+    id: Date.now(),
+    date,
+    weight,
+    fatPct:      parseFloat(document.getElementById(prefix+'-fat-pct').value) || null,
+    fatKg:       parseFloat(document.getElementById(prefix+'-fat-kg').value) || null,
+    muscle:      parseFloat(document.getElementById(prefix+'-muscle').value) || null,
+    skeletal:    parseFloat(document.getElementById(prefix+'-skeletal').value) || null,
+    water:       parseFloat(document.getElementById(prefix+'-water').value) || null,
+    bmr:         parseFloat(document.getElementById(prefix+'-bmr').value) || null,
+    waist:       parseFloat(document.getElementById(prefix+'-waist').value) || null,
+    visceral:    parseFloat(document.getElementById(prefix+'-visceral').value) || null,
+    score:       parseFloat(getFieldVal(prefix+'-score')) || null,
+    bmi:         bmi ? parseFloat(bmi) : null,
+    note:        document.getElementById(prefix+'-note').value || '',
+  };
+}
+function saveRecord() {
+  var rec = buildRecord('r');
+  if (!rec) return;
+  var records = loadRecords();
+  var existing = records.findIndex(r => r.date === rec.date);
+  if (existing >= 0) { if (!confirm('같은 날짜의 기록이 있습니다. 덮어쓰시겠습니까?')) return; records[existing] = rec; }
+  else records.push(rec);
+  saveRecords(records);
+  clearForm();
+  toast('✓ 측정값이 저장되었습니다');
+}
+
+function clearForm() {
+  ['r-weight','r-fat-pct','r-fat-kg','r-muscle','r-skeletal','r-water','r-bmr','r-waist','r-visceral','r-score','r-note']
+    .forEach(id => { var el = document.getElementById(id); if(el) el.value = ''; });
+}
+function setTodayDate() {
+  var el = document.getElementById('r-date');
+  if (el && !el.value) el.value = todayStr();
+}
+
+// ══════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════
+var dashRange = 7;
+var miniWeightChart = null, miniFatChart = null;
+
+function setDashRange(n, btn) {
+  dashRange = n;
+  document.querySelectorAll('#page-dashboard .range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMiniCharts();
+}
+
+function renderDashboard() {
+  var records = loadRecords();
+  var s = loadSettings();
+  var greet = document.getElementById('dash-greeting');
+  greet.textContent = s.name ? `안녕하세요, ${s.name} 님 👋` : '안녕하세요 👋';
+
+  var empty = document.getElementById('emptyDash');
+  var grid = document.getElementById('statGrid');
+
+  if (records.length === 0) {
+    empty.style.display = 'block';
+    grid.innerHTML = '';
+    document.getElementById('dash-last-date').textContent = '—';
+    clearCompBar(); return;
+  }
+  empty.style.display = 'none';
+  var latest = records[records.length - 1];
+  var prev   = records.length > 1 ? records[records.length - 2] : null;
+  document.getElementById('dash-last-date').textContent = formatDate(latest.date);
+  document.getElementById('dash-subtitle').textContent = `최근 측정 기준 · 총 ${records.length}회 측정`;
+
+  var bmi = latest.bmi || (s.height ? calcBMI(latest.weight, s.height) : null);
+  var bmiS = bmiStatus(bmi);
+
+  var stats = [
+    { label:'체중', value: latest.weight, unit:'kg', accent:'#10B981', prev: (prev ? prev.weight : null), reverse: false },
+    { label:'체지방률', value: latest.fatPct, unit:'%', accent:'#F59E0B', prev: (prev ? prev.fatPct : null), reverse: true },
+    { label:'근육량', value: latest.muscle, unit:'kg', accent:'#3B82F6', prev: (prev ? prev.muscle : null), reverse: false },
+    { label:'체수분', value: latest.water, unit:'L', accent:'#0EA5E9', prev: (prev ? prev.water : null), reverse: false },
+    { label:'기초대사량', value: latest.bmr, unit:'kcal', accent:'#8B5CF6', prev: (prev ? prev.bmr : null), reverse: false },
+    { label:'BMI', value: bmi, unit:'', accent: (bmiS ? bmiS.cls : null) === 'tag-ok' ? '#10B981' : '#F59E0B', prev: (prev ? prev.bmi : null), reverse: true },
+  ];
+
+  grid.innerHTML = stats.map(st => `
+    <div class="stat-card" style="--accent:${st.accent}">
+      <div class="stat-label">${st.label}</div>
+      <div style="display:flex;align-items:baseline;gap:3px;">
+        <span class="stat-value">${st.value != null ? st.value : '—'}</span>
+        ${st.unit ? `<span class="stat-unit">${st.unit}</span>` : ''}
+      </div>
+      ${s.showDelta ? (deltaHTML(st.value, st.prev, st.reverse) || '') : ''}
+    </div>
+  `).join('');
+
+  // Goal progress + insights
+  renderGoals(latest, s);
+  renderInsights(records, s);
+
+  // Composition bar
+  if (latest.weight) {
+    var fat = latest.fatKg || (latest.fatPct ? latest.weight * latest.fatPct / 100 : null);
+    var muscle = latest.muscle;
+    var water = latest.water;
+    var skeletal = latest.skeletal;
+    var total = latest.weight;
+    var fatW    = fat ? fat/total*100 : 0;
+    var muscleW = muscle ? muscle/total*100 : 0;
+    var skeletalW = skeletal ? skeletal/total*100 : 0;
+    var waterW  = water ? water/total*100 : 0;
+    var otherW  = Math.max(0, 100 - fatW - muscleW - waterW);
+    document.getElementById('seg-muscle').style.width = muscleW+'%';
+    document.getElementById('seg-fat').style.width    = fatW+'%';
+    document.getElementById('seg-bone').style.width   = skeletalW+'%';
+    document.getElementById('seg-water').style.width  = waterW+'%';
+    document.getElementById('seg-other').style.width  = otherW+'%';
+    document.getElementById('leg-muscle').textContent = `근육량 ${(muscle != null ? muscle.toFixed(1) : null)||'—'}kg`;
+    document.getElementById('leg-fat').textContent    = `체지방 ${(fat != null ? fat.toFixed(1) : null)||'—'}kg`;
+    document.getElementById('leg-bone').textContent   = `골격근 ${(skeletal != null ? skeletal.toFixed(1) : null)||'—'}kg`;
+    document.getElementById('leg-water').textContent  = `체수분 ${(water != null ? water.toFixed(1) : null)||'—'}L`;
+    document.getElementById('leg-other').textContent  = `기타 —`;
+  }
+
+  // BMI bar
+  if (bmi) {
+    document.getElementById('bmi-value').textContent = `${bmi} (${(bmiS ? bmiS.label : null)||''})`;
+    // 15~40 range → 0~100%
+    var pct = Math.min(100, Math.max(0, (parseFloat(bmi)-15)/(40-15)*100));
+    document.getElementById('bmiNeedle').style.left = pct+'%';
+  }
+
+  renderMiniCharts();
+
+  // target weight line
+  var ti = document.getElementById('targetInfo');
+  if (s.targetWeight && s.showTarget) {
+    ti.style.display = 'flex';
+    document.getElementById('targetLabel').textContent = `목표 체중 ${s.targetWeight}kg`;
+  } else { ti.style.display = 'none'; }
+}
+
+function clearCompBar() {
+  ['seg-muscle','seg-fat','seg-bone','seg-water','seg-other'].forEach(id => {
+    document.getElementById(id).style.width = '0%';
+  });
+}
+
+function renderMiniCharts() {
+  var records = loadRecords();
+  var s = loadSettings();
+  var filtered = dashRange > 0
+    ? records.filter(r => {
+        var days = (new Date() - new Date(r.date)) / 86400000;
+        return days <= dashRange;
+      })
+    : records;
+
+  var labels = filtered.map(r => formatDate(r.date));
+  var weights = filtered.map(r => r.weight);
+  var fats = filtered.map(r => r.fatPct);
+
+  var baseOpts = {
+    responsive:true,
+    maintainAspectRatio: true,
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'#1E293B',borderColor:'#334155',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#E2E8F0',padding:10}},
+    scales:{
+      x:{ticks:{color:'#475569',font:{size:10},maxRotation:0},grid:{color:'rgba(255,255,255,.04)'}},
+      y:{ticks:{color:'#475569',font:{size:10}},grid:{color:'rgba(255,255,255,.06)'}}
+    },
+    elements:{point:{radius:3,hoverRadius:5},line:{tension:.35}}
+  };
+
+  // null → NaN (갭 처리)
+  var safeArr = arr => arr.map(v => (v == null || isNaN(v)) ? NaN : v);
+
+  // Weight mini
+  if (miniWeightChart) miniWeightChart.destroy();
+  var wCtx = document.getElementById('miniWeightChart').getContext('2d');
+  var wGrad = wCtx.createLinearGradient(0,0,0,140);
+  wGrad.addColorStop(0,'rgba(16,185,129,.3)');
+  wGrad.addColorStop(1,'rgba(16,185,129,0)');
+  var wDs = [{label:'체중',data:safeArr(weights),borderColor:'#10B981',backgroundColor:wGrad,fill:true,borderWidth:2,spanGaps:true}];
+  if (s.targetWeight && s.showTarget) {
+    wDs.push({label:'목표',data:labels.map(()=>parseFloat(s.targetWeight)),borderColor:'#F59E0B',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false});
+  }
+  miniWeightChart = new Chart(wCtx, {type:'line',data:{labels,datasets:wDs},options:(function(){var o=Object.assign({},baseOpts);o.plugins=Object.assign({},baseOpts.plugins,{legend:{display:wDs.length>1,labels:{color:'#94A3B8',font:{size:11},boxWidth:12}}});return o;})()});
+
+  // Fat mini
+  if (miniFatChart) miniFatChart.destroy();
+  var fCtx = document.getElementById('miniFatChart').getContext('2d');
+  var fGrad = fCtx.createLinearGradient(0,0,0,140);
+  fGrad.addColorStop(0,'rgba(245,158,11,.3)');
+  fGrad.addColorStop(1,'rgba(245,158,11,0)');
+  miniFatChart = new Chart(fCtx,{type:'line',data:{labels,datasets:[{label:'체지방률',data:safeArr(fats),borderColor:'#F59E0B',backgroundColor:fGrad,fill:true,borderWidth:2,spanGaps:true}]},options:baseOpts});
+}
+
+// ══════════════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════════════
+function renderHistory() {
+  var records = loadRecords();
+  var s = loadSettings();
+  var tbody = document.getElementById('historyTbody');
+  var empty = document.getElementById('historyEmpty');
+  if (records.length === 0) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = records.slice().reverse().map((r,i) => {
+    var bmi = r.bmi || (s.height ? calcBMI(r.weight, s.height) : null);
+    var bmiS = bmiStatus(bmi);
+    return `<tr>
+      <td style="white-space:nowrap">${formatDate(r.date)}</td>
+      <td>${r.weight}</td>
+      <td>${(r.fatPct != null ? r.fatPct : '—')}</td>
+      <td>${(r.muscle != null ? r.muscle : '—')}</td>
+      <td>${(r.water != null ? r.water : '—')}</td>
+      <td>${(bmi != null ? bmi : '—')}</td>
+      <td>${bmiS ? `<span class="tag ${bmiS.cls}">${bmiS.label}</span>` : '—'}</td>
+      <td style="color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;">${r.note||'—'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="openEditModal(${r.id})">✏️</button>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="deleteRecord(${r.id})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function deleteRecord(id) {
+  if (!confirm('이 기록을 삭제하시겠습니까?')) return;
+  var records = loadRecords().filter(r => r.id !== id);
+  saveRecords(records);
+  renderHistory();
+  toast('삭제되었습니다');
+}
+
+// ══════════════════════════════════════════════════
+// CHARTS PAGE
+// ══════════════════════════════════════════════════
+var chartsRange = 7;
+var chartInstances = {};
+
+function setChartsRange(n, btn) {
+  chartsRange = n;
+  document.querySelectorAll('#page-charts .range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCharts(n);
+}
+
+
+// ── Chart options helper (Object.assign replaces spread for old WebView compat) ──
+function makeChartOpts(base, extraScales, yMin) {
+  var scales = Object.assign({}, base.scales);
+  var yScale = Object.assign({}, base.scales.y);
+  if (yMin !== undefined && yMin !== null) yScale.min = yMin;
+  scales.y = yScale;
+  if (extraScales) {
+    Object.keys(extraScales).forEach(function(k) {
+      scales[k] = extraScales[k];
+    });
+  }
+  var plugins = Object.assign({}, base.plugins);
+  plugins.tooltip = Object.assign({}, base.plugins.tooltip);
+  return Object.assign({}, base, { scales: scales, plugins: plugins });
+}
+
+function renderCharts(range) {
+  var all = loadRecords();
+  var s   = loadSettings();
+  var records = range > 0
+    ? all.filter(r => (new Date() - new Date(r.date)) / 86400000 <= range)
+    : all;
+
+  var labels = records.map(r => formatDate(r.date));
+
+  Object.values(chartInstances).forEach(c => c && c.destroy());
+  chartInstances = {};
+
+  // null → NaN 변환 (Chart.js는 NaN을 갭으로 처리, 0이나 null과 달리 막대/점을 안 그림)
+  var safe = (arr) => arr.map(v => (v == null || isNaN(v)) ? NaN : v);
+  // 데이터가 하나라도 있는지 확인
+  var hasData = (arr) => arr.some(v => v != null && !isNaN(v));
+  // 빈 캔버스에 안내 메시지 오버레이
+  function showEmpty(canvasId, msg) {
+    var box = document.getElementById(canvasId) ? document.getElementById(canvasId).parentElement : null;
+    if (!box) return;
+    var ov = box.querySelector('.chart-empty-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.className = 'chart-empty-overlay';
+      ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;gap:6px;pointer-events:none;';
+      box.style.position = 'relative';
+      box.appendChild(ov);
+    }
+    ov.innerHTML = `<span style="font-size:28px;opacity:.3">📊</span><span>${msg}</span>`;
+  }
+  function clearEmpty(canvasId) {
+    var box = document.getElementById(canvasId) ? document.getElementById(canvasId).parentElement : null;
+    box && box.querySelector('.chart-empty-overlay') && box.querySelector('.chart-empty-overlay').remove();
+  }
+
+  var base = {
+    responsive: true, maintainAspectRatio: true,
+    plugins: {
+      legend: { labels: { color:'#94A3B8', font:{size:11}, boxWidth:12 } },
+      tooltip: {
+        backgroundColor:'#1E293B', borderColor:'#334155', borderWidth:1,
+        titleColor:'#94A3B8', bodyColor:'#E2E8F0', padding:10,
+        filter: item => !isNaN(item.raw),   // NaN 툴팁 숨기기
+      }
+    },
+    scales: {
+      x: { ticks:{color:'#475569',font:{size:10},maxRotation:30}, grid:{color:'rgba(255,255,255,.04)'} },
+      y: { ticks:{color:'#475569',font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} }
+    },
+    elements: { point:{radius:3,hoverRadius:6}, line:{tension:.35} }
+  };
+
+  // ── 체중 ─────────────────────────────────────────
+  clearEmpty('weightChart');
+  var wCtx = document.getElementById('weightChart').getContext('2d');
+  var wData = safe(records.map(r => r.weight));
+  var wDs = [{
+    label:'체중(kg)', data:wData,
+    borderColor:'#10B981', backgroundColor:'rgba(16,185,129,0.15)',
+    fill:true, borderWidth:2, spanGaps:true
+  }];
+  if (s.targetWeight && s.showTarget) {
+    wDs.push({ label:`목표 ${s.targetWeight}kg`, data:labels.map(()=>parseFloat(s.targetWeight)),
+      borderColor:'#F59E0B', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false });
+  }
+  chartInstances.weight = new Chart(wCtx, { type:'line', data:{labels, datasets:wDs}, options:base });
+
+  // ── 체지방률 + 근육량 ─────────────────────────────
+  clearEmpty('fatMuscleChart');
+  var fatData = safe(records.map(r => r.fatPct));
+  var musData = safe(records.map(r => r.muscle));
+  chartInstances.fatMuscle = new Chart(
+    document.getElementById('fatMuscleChart').getContext('2d'),
+    { type:'line', data:{ labels, datasets:[
+        { label:'체지방률(%)', data:fatData, borderColor:'#F59E0B', backgroundColor:'rgba(245,158,11,0.1)',
+          fill:true, borderWidth:2, yAxisID:'y', spanGaps:true },
+        { label:'근육량(kg)',  data:musData, borderColor:'#3B82F6', backgroundColor:'rgba(59,130,246,0.1)',
+          fill:true, borderWidth:2, yAxisID:'y1', spanGaps:true },
+    ]},
+    options: makeChartOpts(base, {
+      y:  { position:'left', ticks:{color:'#475569',font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} },
+      y1: { position:'right', ticks:{color:'#475569',font:{size:10}}, grid:{drawOnChartArea:false} }
+    })
+  });
+
+  // ── 체수분 ───────────────────────────────────────
+  clearEmpty('waterChart');
+  var waterData = safe(records.map(r => r.water));
+  if (hasData(waterData)) {
+    chartInstances.water = new Chart(
+      document.getElementById('waterChart').getContext('2d'),
+      { type:'line', data:{ labels, datasets:[
+          { label:'체수분(L)', data:waterData, borderColor:'#0EA5E9',
+            backgroundColor:'rgba(14,165,233,0.15)', fill:true, borderWidth:2, spanGaps:true }
+      ]}, options:base }
+    );
+  } else {
+    showEmpty('waterChart', '체수분 데이터가 없습니다');
+  }
+
+  // ── 기초대사량 ────────────────────────────────────
+  clearEmpty('bmrChart');
+  var bmrData = safe(records.map(r => r.bmr));
+  if (hasData(bmrData)) {
+    // null인 날은 막대를 그리지 않고 실제 값만 표시
+    var bmrMin = Math.floor(Math.min.apply(null, bmrData.filter(function(v){ return !isNaN(v); })) * 0.92);
+    var bmrOpts = makeChartOpts(base, null, bmrMin);
+    bmrOpts.elements = {};
+    bmrOpts.plugins.tooltip.callbacks = {
+      label: function(ctx) { return isNaN(ctx.raw) ? null : ('기초대사량: ' + ctx.raw + ' kcal'); }
+    };
+    chartInstances.bmr = new Chart(
+      document.getElementById('bmrChart').getContext('2d'),
+      { type:'bar', data:{ labels, datasets:[{
+          label:'기초대사량(kcal)', data:bmrData,
+          backgroundColor: bmrData.map(v => isNaN(v) ? 'transparent' : 'rgba(139,92,246,0.55)'),
+          borderColor:     bmrData.map(v => isNaN(v) ? 'transparent' : '#8B5CF6'),
+          borderWidth:1, borderRadius:4,
+          // null 막대 높이 0 방지: skipNull
+      }]}, options:bmrOpts }
+    );
+  } else {
+    showEmpty('bmrChart', '기초대사량 데이터가 없습니다');
+  }
+
+  // ── 허리둘레 + 내장지방 ───────────────────────────
+  clearEmpty('waistChart');
+  var waistData    = safe(records.map(r => r.waist));
+  var visceralData = safe(records.map(r => r.visceral));
+  var hasWaist     = hasData(waistData);
+  var hasVisc      = hasData(visceralData);
+
+  if (hasWaist || hasVisc) {
+    var waistDs = [];
+    if (hasWaist)  waistDs.push({ label:'허리둘레(cm)',  data:waistData,    borderColor:'#EF4444', backgroundColor:'rgba(239,68,68,0.1)',   fill:true, borderWidth:2, yAxisID:'y',  spanGaps:true });
+    if (hasVisc)   waistDs.push({ label:'내장지방 레벨', data:visceralData, borderColor:'#F97316', backgroundColor:'rgba(249,115,22,0.1)', fill:true, borderWidth:2, yAxisID:'y1', spanGaps:true });
+    chartInstances.waist = new Chart(
+      document.getElementById('waistChart').getContext('2d'),
+      { type:'line', data:{ labels, datasets:waistDs },
+        options: makeChartOpts(base, {
+          y:  { position:'left',  ticks:{color:'#475569',font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'}, display:hasWaist },
+          y1: { position:'right', ticks:{color:'#475569',font:{size:10}}, grid:{drawOnChartArea:false}, display:hasVisc }
+        })
+      }
+    );
+  } else {
+    showEmpty('waistChart', '허리둘레·내장지방 데이터가 없습니다');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════
+function loadSettingsUI() {
+  var s = loadSettings();
+  document.getElementById('s-name').value = s.name||'';
+  document.getElementById('s-gender').value = s.gender||'';
+  document.getElementById('s-birth').value = s.birth||'';
+  document.getElementById('s-height').value = s.height||'';
+  document.getElementById('s-target-weight').value = s.targetWeight||'';
+  document.getElementById('s-target-fat').value = s.targetFat||'';
+  document.getElementById('s-show-target').checked = s.showTarget !== false;
+  document.getElementById('s-auto-bmi').checked = s.autoBMI !== false;
+  document.getElementById('s-show-delta').checked = s.showDelta !== false;
+
+  var records = loadRecords();
+  document.getElementById('data-stats').textContent = `저장된 기록: ${records.length}건 · 마지막 측정: ${records.length ? formatDate(records[records.length-1].date) : '—'}`;
+}
+function saveSettings() {
+  saveSettingsData({
+    name: v('s-name'), gender: v('s-gender'), birth: v('s-birth'),
+    height: parseFloat(v('s-height'))||'', targetWeight: parseFloat(v('s-target-weight'))||'',
+    targetFat: parseFloat(v('s-target-fat'))||'',
+    showTarget: document.getElementById('s-show-target').checked,
+    autoBMI: document.getElementById('s-auto-bmi').checked,
+    showDelta: document.getElementById('s-show-delta').checked,
+  });
+  toast('✓ 설정이 저장되었습니다');
+}
+
+// ══════════════════════════════════════════════════
+// IMPORT / EXPORT
+// ══════════════════════════════════════════════════
+function exportData() {
+  var data = { records: loadRecords(), settings: loadSettings(), exportedAt: new Date().toISOString(), version:'1.0' };
+  var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `inbody_${todayStr()}.json`;
+  a.click();
+  toast('✓ 내보내기 완료');
+}
+function exportCSV() {
+  var records = loadRecords();
+  var s = loadSettings();
+  var headers = ['날짜','체중(kg)','체지방률(%)','체지방량(kg)','근육량(kg)','골격근량(kg)','체수분(L)','기초대사량','허리둘레(cm)','내장지방','BMI','메모'];
+  var rows = records.map(r => {
+    var bmi = r.bmi || (s.height ? calcBMI(r.weight, s.height) : '');
+    return [r.date,r.weight,(r.fatPct != null ? r.fatPct : ''),(r.fatKg != null ? r.fatKg : ''),(r.muscle != null ? r.muscle : ''),(r.skeletal != null ? r.skeletal : ''),(r.water != null ? r.water : ''),(r.bmr != null ? r.bmr : ''),(r.waist != null ? r.waist : ''),(r.visceral != null ? r.visceral : ''),(bmi != null ? bmi : ''),r.note||''];
+  });
+  var csv = [].concat([headers], rows).map(r => r.join(',')).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `inbody_${todayStr()}.csv`;
+  a.click();
+  toast('✓ CSV 내보내기 완료');
+}
+function importData(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = e => {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (data.records) {
+        var existing = loadRecords();
+        var merged = existing.slice();
+        data.records.forEach(r => {
+          if (!merged.find(x => x.date === r.date)) merged.push(r);
+        });
+        saveRecords(merged);
+        if (data.settings) saveSettingsData(Object.assign(loadSettings(), data.settings));
+        toast(`✓ ${data.records.length}건 가져오기 완료`);
+        if (currentPage === 'dashboard') renderDashboard();
+        if (currentPage === 'history') renderHistory();
+      } else { toast('올바른 파일 형식이 아닙니다'); }
+    } catch { toast('파일을 읽을 수 없습니다'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+function clearAllData() {
+  if (!confirm('모든 측정 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+  localStorage.removeItem(RECORDS_KEY);
+  toast('모든 데이터가 삭제되었습니다');
+  renderDashboard();
+  renderHistory();
+}
+
+// ══════════════════════════════════════════════════
+// IMAGE SCAN — Tesseract.js OCR (무료, 로컬 처리)
+// ══════════════════════════════════════════════════
+var scanData   = null;
+var lastDataUrl = null;   // 재시도용 원본 이미지 보관
+
+// ── 드래그&드롭 ────────────────────────────────
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('scanDrop').classList.add('drag-over');
+}
+function onDragLeave(e) {
+  document.getElementById('scanDrop').classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('scanDrop').classList.remove('drag-over');
+  var file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) processImageFile(file);
+}
+function onScanFileChange(e) {
+  var file = e.target.files[0];
+  if (file) processImageFile(file);
+  e.target.value = ''; // 같은 파일 재선택 허용
+}
+
+// ── 이미지 로드 → OCR ─────────────────────────
+function processImageFile(file) {
+  var reader = new FileReader();
+  reader.onload = async (e) => {
+    lastDataUrl = e.target.result;
+
+    // 미리보기 표시
+    var preview = document.getElementById('scanPreview');
+    preview.src = lastDataUrl;
+    document.getElementById('scanFileName').textContent = `📄 ${file.name}  (${(file.size/1024).toFixed(0)} KB)`;
+    document.getElementById('scanPreviewRow').style.display = 'block';
+    document.getElementById('btnRetry').style.display = 'none';
+
+    // 드롭존 숨기기
+    document.getElementById('scanDrop').style.display = 'none';
+
+    // 이전 결과 초기화
+    setScanState('loading');
+    scanData = null;
+
+    await runOCR(lastDataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── 재시도 ─────────────────────────────────────
+async function retryOCR() {
+  if (!lastDataUrl) { resetScan(); return; }
+  setScanState('loading');
+  scanData = null;
+  await runOCR(lastDataUrl);
+}
+
+// ── 상태 전환 ──────────────────────────────────
+// state: 'idle' | 'loading' | 'error' | 'success'
+function setScanState(state, opts) {
+  opts = opts || {};
+  document.getElementById('scanAnalyzing').style.display = state === 'loading'  ? 'flex'  : 'none';
+  document.getElementById('scanError')    .style.display = state === 'error'    ? 'block' : 'none';
+  document.getElementById('scanResult')   .style.display = state === 'success'  ? 'block' : 'none';
+  document.getElementById('btnRetry')     .style.display = (state === 'error' || state === 'success') ? 'flex' : 'none';
+
+  if (state === 'loading') {
+    setProgress(0, 'OCR 엔진 로딩 중...');
+  }
+  if (state === 'error') {
+    document.getElementById('scanErrorTitle').textContent = opts.title || '❌ OCR 인식 실패';
+    document.getElementById('scanErrorMsg').innerHTML     = opts.msg   || '알 수 없는 오류가 발생했습니다.';
+  }
+}
+
+function setProgress(pct, msg) {
+  document.getElementById('scanProgress').style.width = pct + '%';
+  document.getElementById('scanStatus').textContent   = msg;
+}
+
+// ── OCR 실행 ───────────────────────────────────
+async function runOCR(dataUrl) {
+  setScanState('loading');
+
+  try {
+    var result = await Tesseract.recognize(dataUrl, 'kor+eng', {
+      logger: m => {
+        var statusMap = {
+          'loading tesseract core':       [10, 'Tesseract 코어 로딩...'],
+          'initializing tesseract':       [20, '엔진 초기화...'],
+          'loading language traineddata': [35, '언어 데이터 로딩...'],
+          'initializing api':             [50, 'API 준비...'],
+        };
+        if (m.status === 'recognizing text') {
+          setProgress(55 + Math.round(m.progress * 44), `텍스트 인식 중... ${Math.round(m.progress*100)}%`);
+        } else if (statusMap[m.status]) {
+          setProgress.apply(null, statusMap[m.status]);
+        }
+      }
+    });
+
+    setProgress(100, '분석 완료!');
+    var text = result.data.text;
+    console.log('[OCR Raw]\n', text);
+
+    var parsed = parseInbodyText(text);
+    scanData = parsed;
+    showScanResult(parsed, text);
+
+  } catch (err) {
+    console.error('[OCR Error]', err);
+    setScanState('error', {
+      title: '❌ OCR 엔진 오류',
+      msg: `<b>${err.message}</b><br>네트워크 문제이거나 이미지가 손상되었을 수 있습니다.<br>아래 버튼으로 재시도하거나 다른 이미지를 선택하세요.`
+    });
+  }
+}
+
+// ── 파서 ───────────────────────────────────────
+function parseInbodyText(text) {
+  var t = text
+    .replace(/\r\n/g, '\n')
+    .replace(/[Oo]/g, '0')
+    .replace(/[lI|]/g, '1');
+
+  function extractNum(patterns) {
+    for (var _pi = 0; _pi < patterns.length; _pi++) {
+      var pat = patterns[_pi];
+      var m = t.match(pat);
+      if (m) {
+        var raw = m[1].replace(/[,，\s]/g, '').replace(/[Oo]/g,'0');
+        var n = parseFloat(raw);
+        if (!isNaN(n)) return n;
+      }
+    }
+    return null;
+  }
+  function extractInt(patterns) {
+    var v = extractNum(patterns);
+    return v != null ? Math.round(v) : null;
+  }
+
+  var weight     = extractNum([/체\s*중\s*[\n\r:：\s]*(\d+\.?\d*)\s*kg/i, /(\d{2,3}\.?\d*)\s*kg[\s\n]*체중/i, /체중[\s\S]{0,20}?(\d{2,3}\.\d+)/, /(\d{2,3}\.\d{1,2})\s*kg/]);
+  var fatPct     = extractNum([/체지방\s*(\d+\.?\d*)\s*%/i, /체지방률\s*[\n:：\s]*(\d+\.?\d*)/i, /지방\s*(\d+\.?\d*)\s*%/i, /fat[:\s]*(\d+\.?\d*)\s*%/i, /(\d+\.?\d*)\s*%[\s\n]*(?:높음|낮음|정상|보통)/i, /체지방[\s\S]{0,10}?(\d+\.\d+)/]);
+  var muscle     = extractNum([/근\s*육\s*(\d+\.?\d*)\s*kg/i, /근육량\s*[\n:：\s]*(\d+\.?\d*)/i, /muscle[\s:]*(\d+\.?\d*)/i, /근육[\s\S]{0,10}?(\d+\.\d+)/]);
+  var skeletal   = extractNum([/골격근\s*(\d+\.?\d*)\s*kg/i, /골격근량\s*[\n:：\s]*(\d+\.?\d*)/i, /skeletal[\s\S]{0,10}?(\d+\.?\d*)/i]);
+  var waterPct   = extractNum([/수\s*분\s*(\d+\.?\d*)\s*%/i, /체수분\s*[\n:：\s]*(\d+\.?\d*)/i, /수분[\s\S]{0,10}?(\d+\.\d+)/]);
+  var bmr        = extractInt([/기\s*초\s*대\s*사\s*량\s*[\n:：\s,]*([\d,]+)\s*kcal/i, /기초대사\s*([\d,]+)/i, /BMR\s*[\n:：\s]*([\d,]+)/i, /(1[2-9]\d{2}|[2-3]\d{3})\s*kcal/i]);
+  var bmi        = extractNum([/BMI\s*(\d+\.?\d*)/i, /BMI[\s\S]{0,5}?(\d{2}\.\d)/]);
+  var visceral   = extractInt([/내\s*장\s*지\s*방\s*(\d+)/i, /내장\s*지\s*방[\s\S]{0,5}?(\d+)/i, /visceral[\s\S]{0,10}?(\d+)/i]);
+  var boneDensity= extractNum([/뼈\s*밀\s*도\s*(\d+\.?\d*)\s*kg/i, /골밀도[\s\S]{0,10}?(\d+\.\d+)/i, /bone[\s\S]{0,10}?(\d+\.\d+)/i]);
+  var protein    = extractNum([/단\s*백\s*질\s*(\d+\.?\d*)\s*%/i, /단백질[\s\S]{0,10}?(\d+\.\d+)/, /protein[\s\S]{0,10}?(\d+\.?\d*)/i]);
+  var score      = extractInt([/바디\s*점수[\s\n:：]*(\d+)/i, /인바디\s*점수[\s\n:：]*(\d+)/i, /body\s*score[\s:]*(\d+)/i, /점수[\s\S]{0,5}?(\d{2,3})/]);
+
+  var date = null;
+  var datePats = [/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/, /(\d{2})\/(\d{2})\s+(\d{2}:\d{2})/, /(\d{1,2})월\s*(\d{1,2})일/];
+  for (var _di = 0; _di < datePats.length; _di++) {
+    var _dm = t.match(datePats[_di]);
+    if (_dm) {
+      var _yr = new Date().getFullYear();
+      if (_dm[0].indexOf('월') >= 0) {
+        date = _yr + '-' + String(_dm[1]).padStart(2,'0') + '-' + String(_dm[2]).padStart(2,'0');
+      } else if (_dm[1].length === 4) {
+        date = _dm[1] + '-' + String(_dm[2]).padStart(2,'0') + '-' + String(_dm[3]).padStart(2,'0');
+      } else if (_dm[3] && _dm[3].indexOf(':') >= 0) {
+        date = _yr + '-' + String(_dm[1]).padStart(2,'0') + '-' + String(_dm[2]).padStart(2,'0');
+      }
+      if (date) break;
+    }
+  }
+
+  var note = '';
+  if (/zepp/i.test(t)) note = 'Zepp Health';
+  else if (/inbody/i.test(t)) note = 'InBody';
+  else if (/tanita/i.test(t)) note = 'TANITA';
+  else if (/samsung health|갤럭시/i.test(t)) note = 'Samsung Health';
+
+  return { date, weight, fatPct, fatKg:null, muscle, skeletal,
+           water:null, waterPct, bmr, bmi, waist:null,
+           visceral, boneDensity, protein, score, note };
+}
+
+// ─────────────────────────────────────────────────
+// 환산 계산: OCR 인식값 → 미인식 항목 추정
+// ─────────────────────────────────────────────────
+function deriveValues(d, settings) {
+  var s   = settings || loadSettings();
+  var r   = {};   // 환산 결과
+  var src = {};   // 계산 근거
+
+  var W   = d.weight;
+  var fp  = d.fatPct;
+  var mu  = d.muscle;
+  var wP  = d.waterPct;
+  var bmd = d.boneDensity;
+
+  // ── 신장 결정: 이미지 BMI + 체중으로 역산 우선 ─────────────────
+  // 앱이 사용한 실제 키를 이미지에서 역산 → 설정값보다 정확
+  var H = null;
+  var heightSrc = '';
+  if (W && d.bmi) {
+    // BMI = W / (H/100)²  →  H = sqrt(W / BMI) × 100
+    H = round1(Math.sqrt(W / d.bmi) * 100);
+    heightSrc = `앱 BMI(${d.bmi}) + 체중(${W}kg) 역산`;
+    // 역산 키를 설정에 없을 때 활용 (설정 업데이트는 안 함)
+  } else if (s.height) {
+    H = parseFloat(s.height);
+    heightSrc = `설정값 (${H}cm)`;
+  }
+
+  // ① 체지방량 = 체중 × 체지방률 ÷ 100
+  if (W && fp && !d.fatKg) {
+    r.fatKg = round1(W * fp / 100);
+    src.fatKg = `${W}kg × ${fp}% ÷ 100`;
+  }
+
+  // ② 제지방량 (LBM) = 체중 − 체지방량
+  var fatKg = d.fatKg || r.fatKg;
+  if (W && fatKg) {
+    r.lbm = round1(W - fatKg);
+    src.lbm = `체중(${W}) − 체지방량(${fatKg})`;
+  }
+
+  // ③ 체수분량
+  //    · 수분% 있으면: 체중 × 수분%
+  //    · 없으면: LBM × 0.73 (Watson 수화계수)
+  if (W && wP && !d.water) {
+    r.water = round1(W * wP / 100);
+    src.water = `${W}kg × ${wP}% ÷ 100 (이미지 수분%)`;
+  } else if (r.lbm && !d.water) {
+    r.water = round1(r.lbm * 0.73);
+    src.water = `제지방량(${r.lbm}) × 0.73 (Watson 수화계수)`;
+  }
+
+  // ④ 골격근량 (SMM) ≈ 근육량 × 0.588  (Janssen 2000)
+  if (mu && !d.skeletal) {
+    r.skeletal = round1(mu * 0.588);
+    src.skeletal = `근육량(${mu}) × 0.588 (Janssen 2000)`;
+  }
+
+  // ⑤ BMI — 이미지에 있으면 계산 안 함, 없을 때만 계산
+  if (W && H && !d.bmi) {
+    r.bmi = round1(W / Math.pow(H / 100, 2));
+    src.bmi = `${W} ÷ (${H/100})²  [키: ${heightSrc}]`;
+  }
+  // 이미지 BMI가 있을 때는 역산 키 정보만 표시
+  if (d.bmi && H && heightSrc.includes('역산')) {
+    r.heightFromBMI = H;
+    src.heightFromBMI = `앱 기준 키 역산: BMI(${d.bmi}), 체중(${W}kg) → ${H}cm`;
+  }
+
+  // ⑥ 기초대사량 (BMR)
+  //    우선순위: Mifflin-St Jeor (키+나이+성별) > Katch-McArdle (LBM만)
+  if (!d.bmr) {
+    var lbmForBmr = r.lbm;
+    // Mifflin — 키 필요 (역산 키도 사용)
+    if (W && H && s.birth) {
+      var age = Math.floor((new Date() - new Date(s.birth)) / 31557600000);
+      if (age > 0 && age < 120) {
+        var base = 10 * W + 6.25 * H - 5 * age;
+        r.bmr = Math.round(s.gender === 'F' ? base - 161 : base + 5);
+        src.bmr = `Mifflin-St Jeor (${s.gender==='F'?'여':'남'}, ${age}세, 키 ${H}cm [${heightSrc}])`;
+      }
+    }
+    // Katch-McArdle fallback — 키 없어도 LBM으로 계산
+    if (!r.bmr && lbmForBmr) {
+      r.bmr = Math.round(370 + 21.6 * lbmForBmr);
+      src.bmr = `Katch-McArdle: 370 + 21.6 × 제지방량(${lbmForBmr}kg)`;
+    }
+  }
+
+  // ⑦ 단백질량 ≈ 근육량 × 0.20
+  if (mu) {
+    r.proteinKg = round1(mu * 0.20);
+    src.proteinKg = `근육량(${mu}) × 0.20 (근육 내 단백질 비율)`;
+  }
+
+  // ⑧ 무기질량
+  if (bmd) {
+    r.mineral = round1(bmd * 0.35);
+    src.mineral = `뼈밀도(${bmd}kg) × 0.35`;
+  } else if (W) {
+    r.mineral = round1(W * 0.04);
+    src.mineral = `체중(${W}) × 0.04 (표준 비율)`;
+  }
+
+  // ⑨ 허리둘레 추정 — Lean et al. 회귀식
+  //    남: waist = 2.394 × BMI + 0.557 × 나이 − 14.65
+  //    여: waist = 1.949 × BMI + 0.571 × 나이 − 11.16
+  //    나이 모를 때: 단순 BMI 비례 (±6cm 오차)
+  var bmiVal = d.bmi || r.bmi;
+  if (bmiVal && !d.waist) {
+    var isMale = s.gender !== 'F';
+    var age2 = null;
+    if (s.birth) age2 = Math.floor((new Date() - new Date(s.birth)) / 31557600000);
+    if (age2 && age2 > 0 && age2 < 120) {
+      r.waist = round1(isMale
+        ? 2.394 * bmiVal + 0.557 * age2 - 14.65
+        : 1.949 * bmiVal + 0.571 * age2 - 11.16);
+      src.waist = `Lean 회귀식 (BMI ${bmiVal}, ${age2}세, ${isMale?'남':'여'}) ±4cm`;
+    } else {
+      r.waist = round1(bmiVal * (isMale ? 2.5 : 2.3));
+      src.waist = `BMI(${bmiVal}) × ${isMale?2.5:2.3} 단순 추정 (나이 미입력, ±6cm)`;
+    }
+  }
+
+  return { values: r, sources: src };
+}
+
+function round1(v) { return Math.round(v * 10) / 10; }
+
+// ── 결과 표시 ──────────────────────────────────
+function showScanResult(data, rawText) {
+  var fields = [
+    { key:'date',        label:'측정 날짜',    unit:'' },
+    { key:'weight',      label:'체중',         unit:'kg' },
+    { key:'fatPct',      label:'체지방률',      unit:'%' },
+    { key:'muscle',      label:'근육량',        unit:'kg' },
+    { key:'skeletal',    label:'골격근량',      unit:'kg' },
+    { key:'waterPct',    label:'체수분',        unit:'%' },
+    { key:'bmr',         label:'기초대사량',    unit:'kcal' },
+    { key:'bmi',         label:'BMI',          unit:'' },
+    { key:'visceral',    label:'내장지방 레벨', unit:'' },
+    { key:'boneDensity', label:'뼈밀도',        unit:'kg' },
+    { key:'protein',     label:'단백질',        unit:'%' },
+    { key:'score',       label:'바디 점수',     unit:'' },
+  ];
+
+  var recognized = fields.filter(f => data[f.key] != null).length;
+
+  // 인식 0개면 에러 상태로 전환
+  if (recognized === 0) {
+    setScanState('error', {
+      title: '⚠️ 수치를 인식하지 못했습니다',
+      msg: '이미지에서 체성분 수치를 찾지 못했습니다.<br>'
+         + '• 이미지가 충분히 선명한지 확인하세요<br>'
+         + '• 화면 전체가 찍힌 캡처인지 확인하세요<br>'
+         + '• 다른 이미지를 선택하거나 다시 시도해 보세요'
+    });
+    return;
+  }
+
+  // ── OCR 인식 필드 표시 ──
+  document.getElementById('scanResultTitle').textContent = `✓ OCR 인식 완료 — ${recognized}개 항목 인식됨`;
+  document.getElementById('scanFields').innerHTML = fields.map(f => {
+    var val = data[f.key];
+    var hasVal = val != null && val !== '';
+    return `<div class="scan-field">
+      <div class="scan-field-label">${f.label}</div>
+      <div class="scan-field-value ${hasVal ? '' : 'missing'}">${hasVal ? val + (f.unit ? '\u00a0' + f.unit : '') : '—'}</div>
+    </div>`;
+  }).join('');
+
+  // ── 환산값 계산 및 표시 ──
+  var _derived = deriveValues(data);
+  var dv = _derived.values;
+  var ds = _derived.sources;
+  // scanData에 환산값 병합 (apply 시 함께 사용)
+  scanData._derived = dv;
+
+  var derivedDefs = [
+    { key:'heightFromBMI', label:'앱 기준 키 역산',  unit:'cm'  },
+    { key:'fatKg',         label:'체지방량',          unit:'kg'  },
+    { key:'lbm',           label:'제지방량 (LBM)',    unit:'kg'  },
+    { key:'water',         label:'체수분량',          unit:'L'   },
+    { key:'skeletal',      label:'골격근량',          unit:'kg'  },
+    { key:'bmi',           label:'BMI (계산)',        unit:''    },
+    { key:'bmr',           label:'기초대사량',        unit:'kcal'},
+    { key:'waist',         label:'허리둘레 (추정)',   unit:'cm'  },
+    { key:'proteinKg',     label:'단백질량',          unit:'kg'  },
+    { key:'mineral',       label:'무기질량',          unit:'kg'  },
+  ];
+
+  // OCR로 이미 인식된 항목은 환산 목록에서 제외 (중복 방지)
+  var skipKeys = new Set();
+  if (data.bmi)      skipKeys.add('bmi');
+  if (data.skeletal) skipKeys.add('skeletal');
+  if (data.water)    skipKeys.add('water');
+  if (data.fatKg)    skipKeys.add('fatKg');
+  if (data.bmr)      skipKeys.add('bmr');
+  // heightFromBMI는 항상 표시 (역산 키 정보 제공)
+
+  var derivedToShow = derivedDefs.filter(f => dv[f.key] != null && !skipKeys.has(f.key));
+
+  var derivedSection = document.getElementById('derivedSection');
+  if (derivedToShow.length > 0) {
+    document.getElementById('derivedFields').innerHTML = derivedToShow.map(f => `
+      <div class="derived-field scan-field" title="${ds[f.key] || ''}">
+        <div class="scan-field-label">${f.label}</div>
+        <div class="scan-field-value">${dv[f.key]}${f.unit ? '\u00a0'+f.unit : ''}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4;">${ds[f.key] || ''}</div>
+      </div>`).join('');
+    derivedSection.style.display = 'block';
+  } else {
+    derivedSection.style.display = 'none';
+  }
+
+  setScanState('success');
+  var totalItems = recognized + derivedToShow.length;
+  var hasBMIreverse = dv.heightFromBMI != null;
+  toast(`✓ OCR ${recognized}개 인식 + 환산 ${derivedToShow.length}개 계산${hasBMIreverse ? ` (앱 키 역산: ${dv.heightFromBMI}cm)` : ''}`);
+  applyScanResult(true);
+}
+
+// ── 폼에 적용 ──────────────────────────────────
+function applyScanResult(silent) {
+  if (!scanData) return;
+  var d  = scanData;
+  var dv = scanData._derived || {};   // 환산값
+
+  var set = (id, val) => {
+    var el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  };
+
+  // ── OCR 인식값 우선 적용 ──
+  if (d.date) set('r-date', d.date);
+  set('r-weight',   d.weight);
+  set('r-fat-pct',  d.fatPct);
+  set('r-fat-kg',   d.fatKg);
+  set('r-muscle',   d.muscle);
+  set('r-skeletal', d.skeletal);
+  set('r-bmr',      d.bmr);
+  set('r-waist',    d.waist);
+  set('r-visceral', d.visceral);
+  set('r-score',    d.score);
+  if (d.note) set('r-note', d.note);
+
+  // ── 환산값: OCR에 없는 항목만 채움 ──
+  if (!d.fatKg   && dv.fatKg)    set('r-fat-kg',  dv.fatKg);
+  if (!d.skeletal && dv.skeletal) set('r-skeletal', dv.skeletal);
+  if (!d.water   && dv.water)    set('r-water',   dv.water);
+  if (!d.bmr     && dv.bmr)      set('r-bmr',     dv.bmr);
+  if (!d.waist   && dv.waist)    set('r-waist',   dv.waist);
+
+  if (!silent) {
+    toast('✓ 인식값 + 환산값이 폼에 입력되었습니다. 확인 후 저장하세요.');
+    var formCard = document.querySelector('#page-record .card:last-child');
+    if (formCard) formCard.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+}
+
+// ── 초기화 (처음부터) ──────────────────────────
+function resetScan() {
+  lastDataUrl = null;
+  scanData    = null;
+  var preview = document.getElementById('scanPreview');
+  preview.src = '';
+  document.getElementById('scanPreviewRow').style.display = 'none';
+  document.getElementById('scanDrop').style.display       = 'block';
+  setScanState('idle');
+  // file input 초기화
+  var fi = document.getElementById('scanFileInput');
+  if (fi) fi.value = '';
+}
+
+function updateApiKeyUI() {} // stub
+// ══════════════════════════════════════════════════
+// FEATURE: 기록 수정 (Edit Modal)
+// ══════════════════════════════════════════════════
+function openEditModal(id) {
+  var rec = loadRecords().find(r => r.id === id);
+  if (!rec) return;
+  var sv = (eid, val) => { var el = document.getElementById(eid); if (el) el.value = (val != null ? val : ''); };
+  sv('e-id',      rec.id);
+  sv('e-date',    rec.date);
+  sv('e-weight',  rec.weight);
+  sv('e-fat-pct', rec.fatPct);
+  sv('e-fat-kg',  rec.fatKg);
+  sv('e-muscle',  rec.muscle);
+  sv('e-skeletal',rec.skeletal);
+  sv('e-water',   rec.water);
+  sv('e-bmr',     rec.bmr);
+  sv('e-waist',   rec.waist);
+  sv('e-visceral',rec.visceral);
+  sv('e-score',   rec.score);
+  sv('e-note',    rec.note);
+  document.getElementById('editModalBg').classList.add('open');
+}
+function closeEditModal() {
+  document.getElementById('editModalBg').classList.remove('open');
+};
+function saveEditRecord() {
+  var id   = parseInt(document.getElementById('e-id').value);
+  var date = document.getElementById('e-date').value;
+  var wt   = parseFloat(document.getElementById('e-weight').value);
+  if (!date || isNaN(wt)) { toast('날짜와 체중은 필수입니다'); return; }
+  var gv = eid => { var v = parseFloat(document.getElementById(eid).value); return isNaN(v) ? null : v; };
+  var records = loadRecords();
+  var idx = records.findIndex(r => r.id === id);
+  if (idx < 0) { toast('기록을 찾을 수 없습니다'); return; }
+  var s = loadSettings();
+  records[idx] = Object.assign({}, records[idx], {
+    date: date, weight: wt,
+    fatPct:   gv('e-fat-pct'), fatKg:  gv('e-fat-kg'),
+    muscle:   gv('e-muscle'),  skeletal:gv('e-skeletal'),
+    water:    gv('e-water'),   bmr:    gv('e-bmr'),
+    waist:    gv('e-waist'),   visceral:gv('e-visceral'),
+    score:    gv('e-score'),
+    note:     document.getElementById('e-note').value || '',
+    bmi:      (s.autoBMI && s.height) ? parseFloat(calcBMI(wt, s.height)) : records[idx].bmi,
+  });
+  saveRecords(records);
+  closeEditModal();
+  toast('✓ 수정되었습니다');
+  if (currentPage === 'history')   renderHistory();
+  if (currentPage === 'dashboard') renderDashboard();
+}
+function deleteFromEdit() {
+  var id = parseInt(document.getElementById('e-id').value);
+  if (!confirm('이 기록을 삭제하시겠습니까?')) return;
+  saveRecords(loadRecords().filter(r => r.id !== id));
+  closeEditModal();
+  toast('삭제되었습니다');
+  if (currentPage === 'history')   renderHistory();
+  if (currentPage === 'dashboard') renderDashboard();
+}
+
+// ══════════════════════════════════════════════════
+// FEATURE: 목표 달성률 (Goal Progress)
+// ══════════════════════════════════════════════════
+function renderGoals(latest, s) {
+  var el = document.getElementById('goalSection');
+  if (!el) return;
+  var goals = [];
+
+  if (s.targetWeight && latest.weight) {
+    var initial = getInitialValue('weight');
+    var curr = latest.weight;
+    var target = parseFloat(s.targetWeight);
+    var totalDelta = initial ? Math.abs(initial - target) : null;
+    var doneDelta  = initial ? Math.abs(initial - curr)   : null;
+    var pct = totalDelta ? Math.min(100, Math.round(doneDelta / totalDelta * 100)) : null;
+    var rem = round1(curr - target);
+    var done = Math.abs(rem) < 0.2;
+    goals.push({
+      icon: '⚖️', color: '#10B981', bg: 'rgba(16,185,129,.12)',
+      label: '목표 체중',
+      current: curr + ' kg',
+      target:  '목표 ' + target + ' kg',
+      remaining: done ? '🎯 달성!' : (rem > 0 ? `−${rem}kg 남음` : `+${Math.abs(rem)}kg 필요`),
+      remColor: done ? '#10B981' : (Math.abs(rem) < 2 ? '#F59E0B' : '#94A3B8'),
+      pct: (pct != null ? pct : (done ? 100 : 0)),
+      barColor: '#10B981',
+    });
+  }
+
+  if (s.targetFat && latest.fatPct) {
+    var curr   = latest.fatPct;
+    var target = parseFloat(s.targetFat);
+    var initial = getInitialValue('fatPct');
+    var totalDelta = initial ? Math.abs(initial - target) : null;
+    var doneDelta  = initial ? Math.abs(initial - curr)   : null;
+    var pct = totalDelta ? Math.min(100, Math.round(doneDelta / totalDelta * 100)) : null;
+    var rem = round1(curr - target);
+    var done = Math.abs(rem) < 0.3;
+    goals.push({
+      icon: '🔥', color: '#F59E0B', bg: 'rgba(245,158,11,.12)',
+      label: '목표 체지방률',
+      current: curr + ' %',
+      target:  '목표 ' + target + ' %',
+      remaining: done ? '🎯 달성!' : (rem > 0 ? `−${rem}% 남음` : `+${Math.abs(rem)}% 필요`),
+      remColor: done ? '#10B981' : (Math.abs(rem) < 1 ? '#F59E0B' : '#94A3B8'),
+      pct: (pct != null ? pct : 0),
+      barColor: '#F59E0B',
+    });
+  }
+
+  if (goals.length === 0) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+  <div class="goal-card" style="margin-bottom:16px;">
+    <div class="card-title">🎯 목표 달성률</div>
+    ${goals.map(g => `
+    <div class="goal-row">
+      <div class="goal-icon" style="background:${g.bg}">${g.icon}</div>
+      <div class="goal-info">
+        <div class="goal-label">${g.label}</div>
+        <div class="goal-values">
+          <span class="goal-current">${g.current}</span>
+          <span class="goal-target">${g.target}</span>
+          <span class="goal-remaining" style="color:${g.remColor}">${g.remaining}</span>
+        </div>
+        <div class="goal-bar-track">
+          <div class="goal-bar-fill" style="width:${g.pct}%;background:${g.barColor};"></div>
+        </div>
+      </div>
+      <div class="goal-pct" style="color:${g.barColor}">${g.pct}%</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function getInitialValue(key) {
+  var records = loadRecords();
+  if (records.length === 0) return null;
+  return (records[0][key] != null ? records[0][key] : null);
+}
+
+// ══════════════════════════════════════════════════
+// FEATURE: 변화 분석 인사이트 (Insights)
+// ══════════════════════════════════════════════════
+function renderInsights(records, s) {
+  var el = document.getElementById('insightSection');
+  if (!el || records.length < 2) { if(el) el.innerHTML=''; return; }
+
+  var latest = records[records.length - 1];
+  var items  = [];
+
+  // ── 7일 vs 이전 7일 ──────────────────────────
+  // var now = new Date(); // (unused)
+  var r7  = records.filter(r => daysDiff(r.date) <= 7);
+  var r14 = records.filter(r => daysDiff(r.date) > 7 && daysDiff(r.date) <= 14);
+
+  var avg7w  = avgField(r7,  'weight'),  avg14w  = avgField(r14, 'weight');
+  var avg7f  = avgField(r7,  'fatPct'),  avg14f  = avgField(r14, 'fatPct');
+  var avg7m  = avgField(r7,  'muscle'),  avg14m  = avgField(r14, 'muscle');
+
+  // 체중 변화
+  if (avg7w && avg14w) {
+    var diff = round1(avg7w - avg14w);
+    if (Math.abs(diff) >= 0.2) {
+      var down = diff < 0;
+      items.push({
+        emoji: down ? '📉' : '📈',
+        text: `최근 7일 평균 체중이 이전 대비 <b>${Math.abs(diff)}kg ${down?'감소':'증가'}</b>했습니다.`
+          + (down ? '' : ' 식단을 점검해 보세요.'),
+      });
+    }
+  }
+
+  // 지방 vs 근육 동반 분석
+  if (avg7f && avg14f && avg7m && avg14m) {
+    var fatDn  = avg7f < avg14f;
+    var muUp   = avg7m > avg14m;
+    if (fatDn && muUp) {
+      items.push({ emoji:'💪', text:'체지방은 줄고 근육량은 늘었습니다. <b>이상적인 체성분 변화</b> 중입니다! 👍' });
+    } else if (fatDn && !muUp) {
+      items.push({ emoji:'⚡', text:'체지방이 감소하는 중입니다. 근육량 유지를 위해 <b>단백질 섭취를 확인</b>하세요.' });
+    } else if (!fatDn && muUp) {
+      items.push({ emoji:'🏋️', text:'근육량이 증가하고 있습니다. 체지방 감량도 병행하면 더 좋은 결과가 기대됩니다.' });
+    }
+  }
+
+  // 연속 측정 스트릭
+  var streak = calcStreak(records);
+  if (streak >= 3) {
+    items.push({ emoji:'🔥', text:`<b>${streak}일 연속</b> 측정 중입니다! 꾸준함이 가장 큰 자산입니다.` });
+  } else if (streak === 1) {
+    var last = records[records.length-1];
+    var gap  = daysDiff(last.date);
+    if (gap > 3) items.push({ emoji:'📅', text:`마지막 측정 후 <b>${gap}일</b>이 지났습니다. 정기적인 측정을 추천드립니다.` });
+  }
+
+  // 목표 근접 알림
+  if (s.targetWeight && latest.weight) {
+    var rem = round1(latest.weight - parseFloat(s.targetWeight));
+    if (rem > 0 && rem <= 1.5) {
+      items.push({ emoji:'🎯', text:`목표 체중까지 <b>${rem}kg</b>만 남았습니다! 거의 다 왔어요.` });
+    } else if (rem <= 0) {
+      items.push({ emoji:'🏆', text:'<b>목표 체중을 달성</b>했습니다! 새 목표를 설정해 보세요.' });
+    }
+  }
+
+  // BMI 경고
+  var bmi = latest.bmi || (s.height ? parseFloat(calcBMI(latest.weight, s.height)) : null);
+  if (bmi) {
+    if (bmi >= 25 && bmi < 30) {
+      items.push({ emoji:'⚠️', text:`현재 BMI <b>${bmi}</b>는 과체중 범위입니다. 꾸준한 운동과 식단 관리를 권장드립니다.` });
+    } else if (bmi >= 30) {
+      items.push({ emoji:'🏥', text:`BMI <b>${bmi}</b>는 비만 범위입니다. 전문가 상담을 고려해 보세요.` });
+    } else if (bmi < 18.5) {
+      items.push({ emoji:'🥗', text:`BMI <b>${bmi}</b>는 저체중 범위입니다. 균형 잡힌 영양 섭취가 중요합니다.` });
+    }
+  }
+
+  // 내장지방 경고
+  if (latest.visceral && latest.visceral >= 10) {
+    items.push({ emoji:'🫀', text:`내장지방 레벨 <b>${latest.visceral}</b>은 높은 편입니다. 유산소 운동이 효과적입니다.` });
+  }
+
+  if (items.length === 0) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+  <div class="insight-card" style="margin-bottom:16px;">
+    <div class="insight-head"><span>✨</span> AI 분석 인사이트</div>
+    ${items.map(it => `
+    <div class="insight-item">
+      <span class="insight-emoji">${it.emoji}</span>
+      <span>${it.text}</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+function daysDiff(dateStr) {
+  return Math.round((new Date() - new Date(dateStr)) / 86400000);
+}
+function avgField(arr, key) {
+  var vals = arr.map(r => r[key]).filter(v => v != null && !isNaN(v));
+  return vals.length ? round1(vals.reduce((a,b) => a+b, 0) / vals.length) : null;
+}
+function calcStreak(records) {
+  if (!records.length) return 0;
+  var streak = 1;
+  for (var i = records.length - 1; i > 0; i--) {
+    var diff = daysDiff(records[i-1].date) - daysDiff(records[i].date);
+    if (diff === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// ══════════════════════════════════════════════════
+// FEATURE: PWA (설치 + 오프라인)
+// ══════════════════════════════════════════════════
+function initPWA() {
+  // Service Worker 등록
+  if ('serviceWorker' in navigator) {
+    var swCode = `
+var CACHE = 'inbody-v1';
+var ASSETS = [location.href];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(
+    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
+  );
+});`;
+    var blob = new Blob([swCode], { type: 'application/javascript' });
+    var swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).then(() => {
+      console.log('[PWA] Service Worker registered');
+    }).catch(err => console.warn('[PWA] SW failed:', err));
+  }
+
+  // 설치 프롬프트 캡처
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    window._pwaPrompt = e;
+    showInstallBanner();
+  });
+
+  // iOS Safari 안내
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  if (isIOS && !isStandalone) {
+    setTimeout(showIOSInstallTip, 2000);
+  }
+}
+
+function showInstallBanner() {
+  if (document.getElementById('pwaBanner')) return;
+  var banner = document.createElement('div');
+  banner.id = 'pwaBanner';
+  banner.style.cssText = `
+    position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+    background:var(--surface2); border:1px solid var(--green);
+    border-radius:12px; padding:12px 16px; display:flex;
+    align-items:center; gap:12px; z-index:500; max-width:340px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); animation:slideUp .3s ease;
+  `;
+  banner.innerHTML = `
+    <span style="font-size:24px;">📲</span>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px;">홈화면에 설치</div>
+      <div style="font-size:11px;color:var(--muted);">앱처럼 빠르게 실행 · 오프라인 지원</div>
+    </div>
+    <button onclick="installPWA()" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">설치</button>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;">✕</button>`;
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 12000);
+}
+
+function showIOSInstallTip() {
+  if (document.getElementById('iosTip')) return;
+  var tip = document.createElement('div');
+  tip.id = 'iosTip';
+  tip.style.cssText = `
+    position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px; z-index:500;
+    max-width:300px; text-align:center;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+  `;
+  tip.innerHTML = `
+    <div style="font-size:22px;margin-bottom:8px;">📱</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px;">홈화면에 추가하기</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+      Safari 하단 공유 버튼(□↑)을 누른 후<br>
+      <b>"홈 화면에 추가"</b>를 선택하세요
+    </div>
+    <button onclick="this.parentElement.remove()" style="margin-top:10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 16px;font-size:12px;cursor:pointer;font-family:inherit;">닫기</button>`;
+  document.body.appendChild(tip);
+  setTimeout(() => tip.remove(), 10000);
+}
+
+function installPWA() {
+  var prompt = window._pwaPrompt;
+  if (!prompt) return;
+  prompt.prompt();
+  prompt.userChoice.then(r => {
+    if (r.outcome === 'accepted') toast('✓ 홈화면에 추가되었습니다!');
+    document.getElementById('pwaBanner') && document.getElementById('pwaBanner').remove();
+    window._pwaPrompt = null;
+  });
+}
+
+// 설치 버튼 (설정 페이지에서도 호출 가능)
+function triggerInstall() {
+  if (window._pwaPrompt) {
+    installPWA();
+  } else {
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS) showIOSInstallTip();
+    else toast('설치 프롬프트를 기다리는 중입니다. 잠시 후 다시 시도해 주세요.');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// CHANGELOG (fallback — used when changelog.md is unavailable)
+// ══════════════════════════════════════════════════
+var CHANGELOG = [
+  {
+    date: '2025-06-15',
+    title: 'v1.8 — 구형 Android WebView 호환',
+    entries: [
+      {type:'fix',  text:'ES5 문법으로 전면 교체: const/let → var'},
+      {type:'fix',  text:'객체 스프레드 ({...obj}) → Object.assign({}, obj) 로 변경'},
+      {type:'fix',  text:'배열 스프레드 ([...arr]) → arr.slice() / [].concat() 로 변경'},
+      {type:'fix',  text:'옵셔널 체이닝 (obj?.prop) → 조건 분기로 변경'},
+      {type:'fix',  text:'널 병합 연산자 (a ?? b) → a != null ? a : b 로 변경'},
+      {type:'fix',  text:'for...of 루프 → 전통 for 루프로 변경'},
+      {type:'fix',  text:'구조분해 할당 → 개별 변수 할당으로 변경'},
+      {type:'fix',  text:'함수 기본 파라미터 → 함수 내부에서 undefined 처리로 변경'},
+      {type:'feat', text:'makeChartOpts() 헬퍼 함수 도입 — Chart.js 옵션 객체를 스프레드 없이 안전하게 생성'},
+      {type:'feat', text:'changelog.md 파일 분리 — 앱이 파일을 읽어 변경 이력 페이지를 동적 렌더링'},
+    ]
+  },
+  {
+    date: '2025-06-14',
+    title: 'v1.7 — 그래프 null 데이터 처리 개선 + 4대 기능',
+    entries: [
+      {type:'fix',  text:'기초대사량·체수분·허리둘레 등 null 항목이 섞일 때 그래프가 안 나오던 문제 수정'},
+      {type:'fix',  text:'null 값을 NaN(갭)으로 처리 → 데이터 있는 날만 막대/점 표시, 빈 날은 자연스럽게 건너뜀'},
+      {type:'feat', text:'데이터 없는 차트에 "데이터 없음" 안내 오버레이 표시 (입력 방법 안내 포함)'},
+      {type:'fix',  text:'기초대사량 Y축 하한선을 데이터 최솟값 기준으로 조정 → 미세한 변화도 눈에 띄게'},
+      {type:'feat', text:'기록 수정 기능 — 기록 목록 ✏️ 버튼으로 수정, 모달에서 전 항목 편집 + 삭제'},
+      {type:'feat', text:'목표 달성률 카드 — 현재값·목표값·남은 양·달성% 프로그레스 바 (체중·체지방률)'},
+      {type:'feat', text:'변화 분석 인사이트 — 7일 추이·체성분 패턴·연속 측정 스트릭·BMI·내장지방 경고 자동 분석'},
+      {type:'feat', text:'PWA 지원 — 홈화면 설치 배너·오프라인 캐싱·iOS Safari 안내·설정 페이지 설치 버튼'},
+      {type:'fix',  text:'이미지 BMI(예:26.0)와 앱 계산 BMI가 달랐던 문제 — 이미지 BMI를 최우선 사용'},
+      {type:'feat', text:'이미지 BMI + 체중으로 앱이 사용한 실제 키 역산 (예: BMI 26.0, 76.9kg → 172.0cm)'},
+      {type:'feat', text:'역산된 키를 BMR·허리둘레 계산에 활용 (설정 키보다 정확)'},
+      {type:'feat', text:'환산 결과에 "앱 기준 키 역산" 항목 추가'},
+      {type:'fix',  text:'허리둘레 추정 공식을 Lean 회귀식으로 개선 (나이 있을 때 ±4cm, 없을 때 ±6cm)'},
+      {type:'feat', text:'OCR 인식값으로 미인식 항목 자동 환산: 체지방량·제지방량·체수분량·골격근량·기초대사량·허리둘레·단백질량·무기질량'},
+      {type:'feat', text:'환산 공식: Mifflin-St Jeor(BMR), Katch-McArdle(BMR), Janssen(골격근), 표준 수화계수(체수분) 등'},
+      {type:'feat', text:'OCR 인식값 우선, 인식 못한 항목만 환산값으로 자동 채움'},
+    ]
+  },
+  {
+    date: '2025-06-14',
+    title: 'v1.6 — OCR 자동 환산 + 재시도 UI',
+    entries: [
+      {type:'feat', text:'Tesseract.js OCR로 인바디 앱 캡처 이미지에서 체성분 수치 자동 인식 (완전 무료)'},
+      {type:'feat', text:'드래그&드롭 또는 클릭으로 이미지 업로드 지원'},
+      {type:'feat', text:'Zepp Health, 갤럭시워치, TANITA, InBody 앱 등 주요 앱 스크린샷 지원'},
+      {type:'feat', text:'인식된 수치 미리보기 카드 표시 후 폼 자동 입력'},
+      {type:'feat', text:'100% 브라우저 로컬 처리 — 외부 서버 전송 없음, API 키 불필요'},
+      {type:'feat', text:'OCR 진행률 프로그레스 바 표시'},
+      {type:'ui',   text:'이미지 분석 로딩 스피너 및 결과 카드 UI'},
+      {type:'fix',  text:'OCR 실패 시 전용 오류 카드 표시 (원인 안내 포함)'},
+      {type:'feat', text:'"🔄 다시 시도" — 같은 이미지로 OCR 재실행'},
+      {type:'feat', text:'"🖼️ 다른 이미지" — 재선택 후 즉시 재인식'},
+      {type:'feat', text:'"✕ 처음부터" — 드롭존으로 완전 초기화'},
+      {type:'ui',   text:'이미지 미리보기 + 조작 버튼을 한 행에 표시'},
+    ]
+  },
+  {
+    date: '2025-06-14',
+    title: 'v1.5 — 측정 입력 페이지 통합',
+    entries: [
+      {type:'fix', text:'상단 "+ 측정 추가" 버튼과 "측정 입력" 탭이 다른 화면을 열던 문제 수정 — 단일 페이지로 통합'},
+      {type:'ui',  text:'모달 팝업 제거, 측정 입력 페이지로 일원화'},
+    ]
+  },
+  {
+    date: '2025-06-14',
+    title: 'v1.0 — 최초 릴리즈',
+    entries: [
+      {type:'feat', text:'대시보드: 체중·체지방률·근육량·체수분·기초대사량·BMI 요약 카드'},
+      {type:'feat', text:'체성분 구성비 시각화 바 (근육/체지방/골격근/체수분)'},
+      {type:'feat', text:'BMI 게이지 바 및 판정 (저체중/정상/과체중/비만/고도비만)'},
+      {type:'feat', text:'이전 측정 대비 변화량(▲▼) 실시간 표시'},
+      {type:'feat', text:'측정 입력 폼: 기본 10가지 체성분 항목 지원'},
+      {type:'feat', text:'기록 목록 테이블 (날짜 역순, 삭제 지원)'},
+      {type:'feat', text:'그래프 페이지: 체중/체지방+근육/체수분/기초대사량/허리+내장지방 5종 차트'},
+      {type:'feat', text:'날짜 범위 필터 (7일/14일/30일/3개월/전체)'},
+      {type:'feat', text:'설정: 프로필(이름·신장·목표체중·목표체지방) 영구 저장'},
+      {type:'feat', text:'JSON 가져오기/내보내기 (기존 데이터와 병합)'},
+      {type:'feat', text:'CSV 내보내기 (엑셀 호환, BOM 포함)'},
+      {type:'ui',   text:'다크 네이비 + 에메랄드 그린 테마 디자인'},
+      {type:'ui',   text:'PC·스마트폰 완전 반응형 레이아웃'},
+      {type:'ui',   text:'모바일 하단 탭 네비게이션'},
+      {type:'data', text:'localStorage 기반 로컬 데이터 영구 저장'},
+      {type:'data', text:'동일 날짜 중복 입력 시 덮어쓰기 확인'},
+    ]
+  }
+];
+
+var BADGE_MAP = {feat:'badge-feat',fix:'badge-fix',ui:'badge-ui',data:'badge-data'};
+var BADGE_LABEL = {feat:'NEW',fix:'FIX',ui:'UI',data:'DATA'};
+
+// changelog.md 마크다운 파서 (## 헤더 + - [type] 항목 형식)
+function parseChangelogMd(md) {
+  var lines = md.split('\n');
+  var entries = [];
+  var current = null;
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    if (line.slice(0, 3) === '## ') {
+      if (current) entries.push(current);
+      var hdr = line.slice(3);
+      var dateMatch = hdr.match(/\|\s*(\d{4}-\d{2}-\d{2})\s*$/);
+      var date = dateMatch ? dateMatch[1] : '';
+      var title = dateMatch ? hdr.slice(0, hdr.lastIndexOf('|')).trim() : hdr;
+      current = { date: date, title: title, items: [] };
+    } else if (line.slice(0, 3) === '- [' && current) {
+      var typeMatch = line.match(/^-\s*\[(\w+)\]\s*(.*)/);
+      if (typeMatch) current.items.push({ type: typeMatch[1], text: typeMatch[2] });
+    }
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+function buildChangelogHtml(entries) {
+  return entries.map(function(cl) {
+    var itemsHtml = cl.items.map(function(e) {
+      var badge = BADGE_MAP[e.type] || 'badge-feat';
+      var label = BADGE_LABEL[e.type] || e.type.toUpperCase();
+      return '<li><span class="cl-badge ' + badge + '">' + label + '</span>' + e.text + '</li>';
+    }).join('');
+    return '<div class="cl-entry">'
+      + '<div class="cl-date">' + cl.date + '</div>'
+      + '<div class="cl-title">' + cl.title + '</div>'
+      + '<ul class="cl-items">' + itemsHtml + '</ul>'
+      + '</div>';
+  }).join('');
+}
+
+function renderChangelog() {
+  var el = document.getElementById('changelogContent');
+  // changelog.md 파일을 fetch — HTTP 서버에서 열면 동적 로드, file://에서는 fallback 사용
+  fetch('./changelog.md')
+    .then(function(res) {
+      if (!res.ok) throw new Error('fetch failed');
+      return res.text();
+    })
+    .then(function(md) {
+      var entries = parseChangelogMd(md);
+      if (entries.length === 0) throw new Error('empty');
+      el.innerHTML = buildChangelogHtml(entries);
+    })
+    .catch(function() {
+      // fallback: 내장 CHANGELOG 배열 사용 (file:// 프로토콜 또는 파일 없을 때)
+      el.innerHTML = buildChangelogHtml(CHANGELOG.map(function(cl) {
+        return { date: cl.date, title: cl.title, items: cl.entries };
+      }));
+    });
+}
+
+// ══════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // ── 수정 모달 배경 클릭 닫기 ──
+  document.getElementById('editModalBg') && document.getElementById('editModalBg').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeEditModal();
+  });
+
+  setTodayDate();
+  updateApiKeyUI();
+  initPWA();        // PWA 서비스워커 + 설치 배너
+  renderDashboard();
+
+  // Demo data if empty
+  if (loadRecords().length === 0) {
+    var demo = [];
+    var base = {weight:78, fatPct:24, muscle:54, water:41, bmr:1680, waist:88, visceral:7};
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate()-i);
+      var noise = () => (Math.random()-.48)*.4;
+      var rec = {
+        id: Date.now()-i*1000,
+        date: d.toISOString().slice(0,10),
+        weight: +(base.weight - i*.06 + noise()).toFixed(1),
+        fatPct: +(base.fatPct - i*.04 + noise()).toFixed(1),
+        fatKg:  null,
+        muscle: +(base.muscle + i*.02 + noise()).toFixed(1),
+        skeletal: +(32 + noise()).toFixed(1),
+        water:  +(base.water + noise()).toFixed(1),
+        bmr:    Math.round(base.bmr + noise()*20),
+        waist:  +(base.waist - i*.05 + noise()).toFixed(1),
+        visceral: Math.max(1, Math.round(base.visceral - i*.03 + noise()*.5)),
+        bmi: null, note: '',
+      };
+      rec.fatKg = +(rec.weight * rec.fatPct / 100).toFixed(1);
+      demo.push(rec);
+    }
+    saveRecords(demo);
+    // default settings
+    saveSettingsData({name:'사용자', gender:'M', birth:'', height:175, targetWeight:72, targetFat:18, showTarget:true, autoBMI:true, showDelta:true});
+    renderDashboard();
+  }
+});
+</script>
+</body>
+</html>
