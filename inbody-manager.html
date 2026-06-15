@@ -1399,7 +1399,7 @@ function importData(event) {
     try {
       var data = JSON.parse(e.target.result);
       if (data.records) {
-        var existing = loadRecords();
+        var existing = loadRecords().filter(function(r) { return !r._demo; });
         var merged = existing.slice();
         data.records.forEach(r => {
           if (!merged.find(x => x.date === r.date)) merged.push(r);
