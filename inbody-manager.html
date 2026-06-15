@@ -751,7 +751,13 @@
 <!-- PAGE: CHANGELOG -->
 <!-- ══════════════════════════════════════════ -->
 <div class="page" id="page-changelog">
-  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">변경 이력 (Changelog)</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div style="font-size:20px;font-weight:700;">변경 이력 (Changelog)</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="changelogSyncStatus" style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;"></div>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" onclick="renderChangelog()">🔄 새로고침</button>
+    </div>
+  </div>
   <div class="card">
     <div id="changelogContent"></div>
   </div>
@@ -2402,10 +2408,22 @@ function buildChangelogHtml(entries) {
   }).join('');
 }
 
+function setChangelogSyncStatus(synced) {
+  var el = document.getElementById('changelogSyncStatus');
+  if (!el) return;
+  if (synced) {
+    el.innerHTML = '<span style="color:var(--green);">●</span> 서버와 동기화됨';
+  } else {
+    el.innerHTML = '<span style="color:var(--amber);">●</span> 내장 데이터 (오프라인)';
+  }
+}
+
 function renderChangelog() {
   var el = document.getElementById('changelogContent');
-  // changelog.md 파일을 fetch — HTTP 서버에서 열면 동적 로드, file://에서는 fallback 사용
-  fetch('./changelog.md')
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0;">불러오는 중...</div>';
+  setChangelogSyncStatus(false);
+  // 캐시 무력화를 위해 타임스탬프 쿼리 파라미터 추가
+  fetch('./changelog.md?t=' + Date.now())
     .then(function(res) {
       if (!res.ok) throw new Error('fetch failed');
       return res.text();
@@ -2414,12 +2432,14 @@ function renderChangelog() {
       var entries = parseChangelogMd(md);
       if (entries.length === 0) throw new Error('empty');
       el.innerHTML = buildChangelogHtml(entries);
+      setChangelogSyncStatus(true);
     })
     .catch(function() {
       // fallback: 내장 CHANGELOG 배열 사용 (file:// 프로토콜 또는 파일 없을 때)
       el.innerHTML = buildChangelogHtml(CHANGELOG.map(function(cl) {
         return { date: cl.date, title: cl.title, items: cl.entries };
       }));
+      setChangelogSyncStatus(false);
     });
 }
 
