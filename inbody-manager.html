@@ -940,7 +940,7 @@ function buildRecord(prefix) {
 function saveRecord() {
   var rec = buildRecord('r');
   if (!rec) return;
-  var records = loadRecords();
+  var records = loadRecords().filter(function(r) { return !r._demo; });
   var existing = records.findIndex(r => r.date === rec.date);
   if (existing >= 0) { if (!confirm('같은 날짜의 기록이 있습니다. 덮어쓰시겠습니까?')) return; records[existing] = rec; }
   else records.push(rec);
@@ -2427,6 +2427,7 @@ document.addEventListener('DOMContentLoaded', () => {
       var d = new Date(); d.setDate(d.getDate()-i);
       var noise = () => (Math.random()-.48)*.4;
       var rec = {
+        _demo: true,
         id: Date.now()-i*1000,
         date: d.toISOString().slice(0,10),
         weight: +(base.weight - i*.06 + noise()).toFixed(1),
