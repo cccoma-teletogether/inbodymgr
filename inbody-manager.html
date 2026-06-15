@@ -937,10 +937,18 @@ function buildRecord(prefix) {
     note:        document.getElementById(prefix+'-note').value || '',
   };
 }
+function clearDemoIfActive() {
+  if (localStorage.getItem('inbody_demo_active')) {
+    localStorage.removeItem(RECORDS_KEY);
+    localStorage.removeItem('inbody_demo_active');
+  }
+}
+
 function saveRecord() {
   var rec = buildRecord('r');
   if (!rec) return;
-  var records = loadRecords().filter(function(r) { return !r._demo; });
+  clearDemoIfActive();
+  var records = loadRecords();
   var existing = records.findIndex(r => r.date === rec.date);
   if (existing >= 0) { if (!confirm('같은 날짜의 기록이 있습니다. 덮어쓰시겠습니까?')) return; records[existing] = rec; }
   else records.push(rec);
@@ -1399,7 +1407,8 @@ function importData(event) {
     try {
       var data = JSON.parse(e.target.result);
       if (data.records) {
-        var existing = loadRecords().filter(function(r) { return !r._demo; });
+        clearDemoIfActive();
+        var existing = loadRecords();
         var merged = existing.slice();
         data.records.forEach(r => {
           if (!merged.find(x => x.date === r.date)) merged.push(r);
@@ -2445,6 +2454,7 @@ document.addEventListener('DOMContentLoaded', () => {
       demo.push(rec);
     }
     saveRecords(demo);
+    localStorage.setItem('inbody_demo_active', '1');
     // default settings
     saveSettingsData({name:'사용자', gender:'M', birth:'', height:175, targetWeight:72, targetFat:18, showTarget:true, autoBMI:true, showDelta:true});
     renderDashboard();
