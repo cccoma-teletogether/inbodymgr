@@ -2412,9 +2412,9 @@ function setChangelogSyncStatus(synced) {
   var el = document.getElementById('changelogSyncStatus');
   if (!el) return;
   if (synced) {
-    el.innerHTML = '<span style="color:var(--green);">●</span> 서버와 동기화됨';
+    el.innerHTML = '<span style="color:var(--green);">●</span> changelog.md 동기화 완료';
   } else {
-    el.innerHTML = '<span style="color:var(--amber);">●</span> 내장 데이터 (오프라인)';
+    el.innerHTML = '<span style="color:var(--amber);">●</span> changelog.md 동기화 실패 (내장 데이터)';
   }
 }
 
