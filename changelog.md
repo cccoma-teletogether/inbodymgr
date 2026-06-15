@@ -1,5 +1,11 @@
 # InBody Manager — Changelog
 
+## v1.9 — 데모 데이터 자동 제거 | 2025-06-15
+
+- [feat] 첫 측정값 저장 시 데모 데이터 전체 자동 삭제
+- [feat] JSON 가져오기 시에도 데모 데이터 전체 자동 삭제
+- [fix] localStorage inbody_demo_active 플래그로 데모 상태 관리 — 기존 브라우저에 저장된 데모도 정상 처리
+
 ## v1.8 — 구형 Android WebView 호환 | 2025-06-15
 
 - [fix] ES5 문법으로 전면 교체: const/let → var
