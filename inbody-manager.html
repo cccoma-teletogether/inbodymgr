@@ -2234,29 +2234,9 @@ function calcStreak(records) {
 function initPWA() {
   // Service Worker 등록
   if ('serviceWorker' in navigator) {
-    var swCode = `
-var CACHE = 'inbody-v1';
-var ASSETS = [location.href];
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-  self.skipWaiting();
-});
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
-});
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
-  );
-});`;
-    var blob = new Blob([swCode], { type: 'application/javascript' });
-    var swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).then(() => {
+    navigator.serviceWorker.register('./sw.js').then(function() {
       console.log('[PWA] Service Worker registered');
-    }).catch(err => console.warn('[PWA] SW failed:', err));
+    }).catch(function(err) { console.warn('[PWA] SW failed:', err); });
   }
 
   // 설치 프롬프트 캡처
