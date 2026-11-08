@@ -133,7 +133,7 @@
   /* ── CHART ROW ── */
   .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
   .chart-full { grid-column: 1 / -1; }
-  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; min-width: 0; overflow: hidden; }
   .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .chart-title { font-size: 13px; font-weight: 600; }
   .range-btns { display: flex; gap: 4px; }
@@ -453,7 +453,7 @@
           <button class="range-btn" onclick="setDashRange(0,this)">전체</button>
         </div>
       </div>
-      <canvas id="miniWeightChart" height="140"></canvas>
+      <div style="position:relative;height:160px;"><canvas id="miniWeightChart"></canvas></div>
       <div class="target-info" id="targetInfo" style="display:none;">
         <div class="target-line"></div>
         <span id="targetLabel">목표 체중</span>
@@ -461,7 +461,7 @@
     </div>
     <div class="chart-box">
       <div class="chart-header"><span class="chart-title">체지방률 추이</span></div>
-      <canvas id="miniFatChart" height="140"></canvas>
+      <div style="position:relative;height:160px;"><canvas id="miniFatChart"></canvas></div>
     </div>
   </div>
 
@@ -1157,7 +1157,7 @@ function renderMiniCharts() {
 
   var baseOpts = {
     responsive:true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins:{legend:{display:false},tooltip:{backgroundColor:'#1E293B',borderColor:'#334155',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#E2E8F0',padding:10}},
     scales:{
       x:{ticks:{color:'#475569',font:{size:10},maxRotation:0},grid:{color:'rgba(255,255,255,.04)'}},
