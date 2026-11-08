@@ -1844,7 +1844,7 @@ function deriveValues(d, settings) {
       if (viscLv >= 15) viscAdj = 6;
       else if (viscLv >= 10) viscAdj = 3;
     }
-    var coeffW = isMale ? 1.70 : 1.58;
+    var coeffW = isMale ? 1.87 : 1.74;
     var baseW = Math.sqrt(parseFloat(d.weight)) * Math.sqrt(parseFloat(bmiVal)) * coeffW;
     r.waist = round1(baseW + viscAdj);
     var viscNote = viscLv != null ? (', \uB0B4\uC7A5\uC9C0\uBC29' + viscLv + (viscAdj > 0 ? '(+' + viscAdj + 'cm)' : '')) : '';
