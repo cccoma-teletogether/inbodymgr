@@ -2014,21 +2014,27 @@ function showDerivedModal(id) {
   var rec = loadRecords().find(function(r) { return r.id === id; });
   if (!rec) return;
   var live = deriveValues(rec, loadSettings());
-  var sources = (rec._sources && Object.keys(rec._sources).length > 0) ? rec._sources : live.sources;
-  var derived = (rec._derived && Object.keys(rec._derived).length > 0) ? rec._derived : live.values;
+  var derivedSources = (rec._sources && Object.keys(rec._sources).length > 0) ? rec._sources : live.sources;
+  var derivedVals = (rec._derived && Object.keys(rec._derived).length > 0) ? rec._derived : live.values;
   document.getElementById('derivedModalDate').textContent = formatDate(rec.date) + ' 측정 기록';
-  var items = derivedDefs.filter(function(f) { return derived[f.key] != null; });
-  if (items.length === 0) {
-    document.getElementById('derivedModalBody').innerHTML = '<div style="color:var(--muted);font-size:13px;">환산 계산값이 없습니다.</div>';
-  } else {
-    document.getElementById('derivedModalBody').innerHTML = items.map(function(f) {
-      return '<div class="derived-field scan-field">' +
-        '<div class="scan-field-label">' + f.label + '</div>' +
-        '<div class="scan-field-value">' + derived[f.key] + (f.unit ? ' ' + f.unit : '') + '</div>' +
-        '<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;">' + (sources[f.key] || '') + '</div>' +
-        '</div>';
-    }).join('');
+  var html = '';
+  var anyItem = false;
+  for (var i = 0; i < derivedDefs.length; i++) {
+    var f = derivedDefs[i];
+    var val = (rec[f.key] != null) ? rec[f.key] : derivedVals[f.key];
+    if (val == null) continue;
+    anyItem = true;
+    var srcText = derivedSources[f.key] || (rec[f.key] != null ? '측정값' : '');
+    html += '<div class="derived-field scan-field">' +
+      '<div class="scan-field-label">' + f.label + '</div>' +
+      '<div class="scan-field-value">' + val + (f.unit ? ' ' + f.unit : '') + '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;">' + srcText + '</div>' +
+      '</div>';
   }
+  if (!anyItem) {
+    html = '<div style="color:var(--muted);font-size:13px;">환산 계산값이 없습니다.</div>';
+  }
+  document.getElementById('derivedModalBody').innerHTML = html;
   document.getElementById('derivedModalBg').classList.add('open');
 }
 function closeDerivedModal() {
