@@ -890,7 +890,7 @@ function showPage(id) {
   currentPage = id;
   if (id === 'dashboard') renderDashboard();
   if (id === 'history') renderHistory();
-  if (id === 'charts') renderCharts(chartsRange);
+  if (id === 'charts') { var todayStr = new Date().toISOString().slice(0,10); var ed = document.getElementById('chartEndDate'); if (ed && !ed.value) ed.value = todayStr; renderCharts(chartsRange); }
   if (id === 'settings') loadSettingsUI();
   if (id === 'changelog') renderChangelog();
   if (id === 'record') setTodayDate();
