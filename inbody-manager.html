@@ -682,14 +682,15 @@
 <!-- ══════════════════════════════════════════ -->
 <div class="page" id="page-charts">
   <div style="font-size:20px;font-weight:700;margin-bottom:20px;">상세 그래프</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
     <button class="range-btn active" onclick="setChartsRange(7,this)">7일</button>
     <button class="range-btn" onclick="setChartsRange(14,this)">14일</button>
     <button class="range-btn" onclick="setChartsRange(30,this)">30일</button>
     <button class="range-btn" onclick="setChartsRange(90,this)">3개월</button>
     <button class="range-btn" onclick="setChartsRange(0,this)">전체</button>
+    <button class="range-btn" id="dateRangeToggleBtn" onclick="toggleDateRangePanel()">📅 날짜 지정</button>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+  <div id="dateRangePanel" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
     <input type="date" id="chartStartDate" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;" onchange="applyDateRange()">
     <span style="color:var(--muted);font-size:13px;">~</span>
     <input type="date" id="chartEndDate" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;" onchange="applyDateRange()">
@@ -890,7 +891,7 @@ function showPage(id) {
   currentPage = id;
   if (id === 'dashboard') renderDashboard();
   if (id === 'history') renderHistory();
-  if (id === 'charts') { var todayStr = new Date().toISOString().slice(0,10); var ed = document.getElementById('chartEndDate'); if (ed && !ed.value) ed.value = todayStr; renderCharts(chartsRange); }
+  if (id === 'charts') renderCharts(chartsRange);
   if (id === 'settings') loadSettingsUI();
   if (id === 'changelog') renderChangelog();
   if (id === 'record') setTodayDate();
@@ -1238,13 +1239,32 @@ function setChartsRange(n, btn) {
   chartsRange = n;
   document.querySelectorAll('#page-charts .range-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  // hide date panel and clear dates when range btn clicked
+  var panel = document.getElementById('dateRangePanel');
+  if (panel) { panel.style.display = 'none'; }
+  document.getElementById('chartStartDate').value = '';
+  document.getElementById('chartEndDate').value = '';
   renderCharts(n);
+}
+function toggleDateRangePanel() {
+  var panel = document.getElementById('dateRangePanel');
+  var btn   = document.getElementById('dateRangeToggleBtn');
+  if (panel.style.display === 'flex') {
+    panel.style.display = 'none';
+    btn.classList.remove('active');
+  } else {
+    panel.style.display = 'flex';
+    btn.classList.add('active');
+    var todayStr = new Date().toISOString().slice(0,10);
+    if (!document.getElementById('chartEndDate').value) document.getElementById('chartEndDate').value = todayStr;
+  }
 }
 function applyDateRange() {
   var start = document.getElementById('chartStartDate').value;
   var end   = document.getElementById('chartEndDate').value;
   if (start || end) {
     document.querySelectorAll('#page-charts .range-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('dateRangeToggleBtn').classList.add('active');
     chartsRange = 0;
   }
   renderCharts(chartsRange);
@@ -1252,7 +1272,11 @@ function applyDateRange() {
 function clearDateRange() {
   document.getElementById('chartStartDate').value = '';
   document.getElementById('chartEndDate').value = '';
-  renderCharts(chartsRange);
+  document.getElementById('dateRangePanel').style.display = 'none';
+  document.getElementById('dateRangeToggleBtn').classList.remove('active');
+  chartsRange = 7;
+  document.querySelectorAll('#page-charts .range-btn').forEach(function(b,i){ if(i===0) b.classList.add('active'); else b.classList.remove('active'); });
+  renderCharts(7);
 }
 
 
@@ -1281,7 +1305,7 @@ function renderCharts(range) {
   var records = all.filter(function(r) {
     if (startVal && r.date < startVal) return false;
     if (endVal   && r.date > endVal)   return false;
-    if (!startVal && !endVal && range > 0 && (new Date() - new Date(r.date)) / 86400000 > range) return false;
+    if (!startVal && range > 0 && (new Date() - new Date(r.date)) / 86400000 > range) return false;
     return true;
   });
 
