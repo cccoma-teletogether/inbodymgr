@@ -24,6 +24,20 @@
     --radius:    12px;
   }
 
+  [data-theme='light'] {
+    --bg:        #F1F5F9;
+    --surface:   #FFFFFF;
+    --surface2:  #E2E8F0;
+    --border:    #CBD5E1;
+    --green:     #059669;
+    --green-dim: #D1FAE5;
+    --amber:     #D97706;
+    --red:       #DC2626;
+    --blue:      #2563EB;
+    --text:      #0F172A;
+    --muted:     #64748B;
+  }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -37,7 +51,7 @@
   /* ── NAV ── */
   nav {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(15,23,42,.92);
+    background: var(--bg);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between;
@@ -346,6 +360,7 @@
   </div>
   <div class="nav-actions">
     <button class="btn btn-primary" onclick="openModal()">+ 측정 추가</button>
+    <button class="btn btn-ghost" onclick="toggleTheme()" id="themeBtn" style="padding:6px 10px;font-size:16px;" title="테마 변경">🌙</button>
     <button class="mobile-menu" onclick="toggleMobileMenu()">☰</button>
   </div>
 </nav>
@@ -873,6 +888,20 @@ function showPage(id) {
   if (id === 'settings') loadSettingsUI();
   if (id === 'changelog') renderChangelog();
   if (id === 'record') setTodayDate();
+}
+
+function toggleTheme() {
+  var html = document.documentElement;
+  var isLight = html.getAttribute('data-theme') === 'light';
+  if (isLight) {
+    html.removeAttribute('data-theme');
+    document.getElementById('themeBtn').textContent = '🌙';
+    localStorage.setItem('theme', 'dark');
+  } else {
+    html.setAttribute('data-theme', 'light');
+    document.getElementById('themeBtn').textContent = '☀️';
+    localStorage.setItem('theme', 'light');
+  }
 }
 
 function toggleMobileMenu() {
@@ -2512,6 +2541,13 @@ function renderChangelog() {
 // ══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   // ── 수정 모달 배경 클릭 닫기 ──
+  // restore saved theme
+  var savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    var btn = document.getElementById('themeBtn');
+    if (btn) btn.textContent = '☀️';
+  }
   document.getElementById('editModalBg') && document.getElementById('editModalBg').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEditModal();
   });
