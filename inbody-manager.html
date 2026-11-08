@@ -1832,28 +1832,23 @@ function deriveValues(d, settings) {
     src.mineral = `체중(${W}) × 0.04 (표준 비율)`;
   }
 
-  // 9 waist estimate: Lean regression + visceral fat correction
+  // 9 waist estimate: weight + BMI based formula + visceral fat correction
+  //   base = sqrt(weight) x sqrt(BMI) x coeff  (male 1.82, female 1.70)
+  //   visceral lv 10-14: +3cm, lv 15+: +6cm
   var bmiVal = d.bmi || r.bmi;
-  if (bmiVal && !d.waist) {
+  if (bmiVal && !d.waist && d.weight) {
     var isMale = s.gender !== 'F';
-    var age2 = null;
-    if (s.birth) age2 = Math.floor((new Date() - new Date(s.birth)) / 31557600000);
     var viscAdj = 0;
     var viscLv = d.visceral;
     if (viscLv != null) {
       if (viscLv >= 15) viscAdj = 6;
       else if (viscLv >= 10) viscAdj = 3;
     }
-    var viscNote = viscLv != null ? (', ' + (viscAdj > 0 ? '+' + viscAdj + 'cm' : '')) : '';
-    if (age2 && age2 > 0 && age2 < 120) {
-      var baseW = isMale ? (2.394 * bmiVal + 0.557 * age2 - 14.65) : (1.949 * bmiVal + 0.571 * age2 - 11.16);
-      r.waist = round1(baseW + viscAdj);
-      src.waist = 'Lean ' + (isMale ? '\uB0A8' : '\uC5EC') + ' (BMI ' + bmiVal + ', ' + age2 + '\uC138' + viscNote + ') \u00B14cm';
-    } else {
-      var coeffW = isMale ? 2.5 : 2.3;
-      r.waist = round1(bmiVal * coeffW + viscAdj);
-      src.waist = 'BMI(' + bmiVal + ') \u00D7 ' + coeffW + viscNote + ' (\uB098\uC774 \uBBF8\uC785\uB825, \u00B16cm)';
-    }
+    var coeffW = isMale ? 1.70 : 1.58;
+    var baseW = Math.sqrt(parseFloat(d.weight)) * Math.sqrt(parseFloat(bmiVal)) * coeffW;
+    r.waist = round1(baseW + viscAdj);
+    var viscNote = viscLv != null ? (', \uB0B4\uC7A5\uC9C0\uBC29' + viscLv + (viscAdj > 0 ? '(+' + viscAdj + 'cm)' : '')) : '';
+    src.waist = '\u221A\uCCB4\uC911(' + d.weight + ') \u00D7 \u221ABMI(' + bmiVal + ') \u00D7 ' + coeffW + viscNote + ' (\u00B15cm)';
   }
 
   return { values: r, sources: src };
