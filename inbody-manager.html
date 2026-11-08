@@ -1453,6 +1453,19 @@ function renderCharts(range) {
   }
 }
 
+// resize 시 차트 재렌더링
+(function() {
+  var resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+      Object.keys(chartInstances).forEach(function(k) {
+        if (chartInstances[k]) chartInstances[k].resize();
+      });
+    }, 100);
+  });
+})();
+
 // ══════════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════════
