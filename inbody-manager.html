@@ -266,7 +266,7 @@
     .mobile-menu { display: none; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     nav { padding: 0 14px; }
-    .page { padding: 16px 14px 200px; }
+    .page { padding: 16px 14px 90px; }
     .form-grid { grid-template-columns: 1fr 1fr; }
     .stat-value { font-size: 22px; }
     .mobile-nav { display: flex; justify-content: space-around; }
@@ -2604,6 +2604,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('derivedModalBg') && document.getElementById('derivedModalBg').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeDerivedModal();
   });
+
+  // nav 바 높이에 맞게 페이지 하단 패딩 동적 조정
+  function adjustPagePadding() {
+    var nav = document.querySelector('.mobile-nav');
+    if (nav && window.innerWidth <= 640) {
+      var h = nav.offsetHeight;
+      var pages = document.querySelectorAll('.page');
+      for (var i = 0; i < pages.length; i++) {
+        pages[i].style.paddingBottom = (h + 20) + 'px';
+      }
+    }
+  }
+  adjustPagePadding();
+  window.addEventListener('resize', adjustPagePadding);
 
   setTodayDate();
   updateApiKeyUI();
