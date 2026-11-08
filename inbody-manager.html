@@ -689,6 +689,12 @@
     <button class="range-btn" onclick="setChartsRange(90,this)">3개월</button>
     <button class="range-btn" onclick="setChartsRange(0,this)">전체</button>
   </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+    <input type="date" id="chartStartDate" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;" onchange="applyDateRange()">
+    <span style="color:var(--muted);font-size:13px;">~</span>
+    <input type="date" id="chartEndDate" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;" onchange="applyDateRange()">
+    <button class="btn btn-ghost" onclick="clearDateRange()" style="padding:5px 10px;font-size:12px;">초기화</button>
+  </div>
   <div class="chart-grid">
     <div class="chart-box chart-full"><div class="chart-title" style="margin-bottom:14px;">체중 변화</div><canvas id="weightChart" height="120"></canvas></div>
     <div class="chart-box chart-full"><div class="chart-title" style="margin-bottom:14px;">체지방률 / 근육량</div><canvas id="fatMuscleChart" height="120"></canvas></div>
@@ -1234,6 +1240,21 @@ function setChartsRange(n, btn) {
   btn.classList.add('active');
   renderCharts(n);
 }
+function applyDateRange() {
+  var start = document.getElementById('chartStartDate').value;
+  var end   = document.getElementById('chartEndDate').value;
+  if (start || end) {
+    document.querySelectorAll('#page-charts .range-btn').forEach(b => b.classList.remove('active'));
+    chartsRange = 0;
+  }
+  renderCharts(chartsRange);
+}
+function clearDateRange() {
+  document.getElementById('chartStartDate').value = '';
+  document.getElementById('chartEndDate').value = '';
+  renderCharts(chartsRange);
+}
+
 
 
 // ── Chart options helper (Object.assign replaces spread for old WebView compat) ──
@@ -1255,9 +1276,14 @@ function makeChartOpts(base, extraScales, yMin) {
 function renderCharts(range) {
   var all = loadRecords();
   var s   = loadSettings();
-  var records = range > 0
-    ? all.filter(r => (new Date() - new Date(r.date)) / 86400000 <= range)
-    : all;
+  var startVal = document.getElementById('chartStartDate') ? document.getElementById('chartStartDate').value : '';
+  var endVal   = document.getElementById('chartEndDate')   ? document.getElementById('chartEndDate').value   : '';
+  var records = all.filter(function(r) {
+    if (startVal && r.date < startVal) return false;
+    if (endVal   && r.date > endVal)   return false;
+    if (!startVal && !endVal && range > 0 && (new Date() - new Date(r.date)) / 86400000 > range) return false;
+    return true;
+  });
 
   var labels = records.map(r => formatDate(r.date));
 
