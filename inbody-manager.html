@@ -268,7 +268,6 @@
     border-top: 1px solid var(--border);
     padding: 8px 0 env(safe-area-inset-bottom);
   }
-  .mobile-nav.open { display: flex; justify-content: space-around; }
   .mobile-nav-btn {
     display: flex; flex-direction: column; align-items: center; gap: 4px;
     background: none; border: none; color: var(--muted);
@@ -876,10 +875,10 @@ function showPage(id) {
 }
 
 function toggleMobileMenu() {
-  document.getElementById('mobileNav').classList.toggle('open');
+  /* always visible on mobile - no-op */
 }
 function closeMobileMenu() {
-  document.getElementById('mobileNav').classList.remove('open');
+  /* always visible on mobile - no-op */
 }
 
 // ══════════════════════════════════════════════════
