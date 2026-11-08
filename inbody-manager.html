@@ -1832,24 +1832,30 @@ function deriveValues(d, settings) {
     src.mineral = `체중(${W}) × 0.04 (표준 비율)`;
   }
 
-  // ⑨ 허리둘레 추정 — Lean et al. 회귀식
-  //    남: waist = 2.394 × BMI + 0.557 × 나이 − 14.65
-  //    여: waist = 1.949 × BMI + 0.571 × 나이 − 11.16
-  //    나이 모를 때: 단순 BMI 비례 (±6cm 오차)
+  // 9 waist estimate: Lean regression + visceral fat correction
   var bmiVal = d.bmi || r.bmi;
   if (bmiVal && !d.waist) {
     var isMale = s.gender !== 'F';
     var age2 = null;
     if (s.birth) age2 = Math.floor((new Date() - new Date(s.birth)) / 31557600000);
-    if (age2 && age2 > 0 && age2 < 120) {
-      r.waist = round1(isMale
-        ? 2.394 * bmiVal + 0.557 * age2 - 14.65
-        : 1.949 * bmiVal + 0.571 * age2 - 11.16);
-      src.waist = `Lean 회귀식 (BMI ${bmiVal}, ${age2}세, ${isMale?'남':'여'}) ±4cm`;
-    } else {
-      r.waist = round1(bmiVal * (isMale ? 2.5 : 2.3));
-      src.waist = `BMI(${bmiVal}) × ${isMale?2.5:2.3} 단순 추정 (나이 미입력, ±6cm)`;
+    var viscAdj = 0;
+    var viscLv = d.visceral;
+    if (viscLv != null) {
+      if (viscLv >= 15) viscAdj = 6;
+      else if (viscLv >= 10) viscAdj = 3;
     }
+    var viscNote = viscLv != null ? (', ' + (viscAdj > 0 ? '+' + viscAdj + 'cm' : '')) : '';
+    if (age2 && age2 > 0 && age2 < 120) {
+      var baseW = isMale ? (2.394 * bmiVal + 0.557 * age2 - 14.65) : (1.949 * bmiVal + 0.571 * age2 - 11.16);
+      r.waist = round1(baseW + viscAdj);
+      src.waist = 'Lean ' + (isMale ? '\uB0A8' : '\uC5EC') + ' (BMI ' + bmiVal + ', ' + age2 + '\uC138' + viscNote + ') \u00B14cm';
+    } else {
+      var coeffW = isMale ? 2.5 : 2.3;
+      r.waist = round1(bmiVal * coeffW + viscAdj);
+      src.waist = 'BMI(' + bmiVal + ') \u00D7 ' + coeffW + viscNote + ' (\uB098\uC774 \uBBF8\uC785\uB825, \u00B16cm)';
+    }
+  }
+  }
   }
 
   return { values: r, sources: src };
