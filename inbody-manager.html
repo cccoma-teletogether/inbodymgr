@@ -544,6 +544,7 @@
 
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="applyScanResult()">📋 폼에 적용 (인식+환산)</button>
+        <button class="btn btn-primary" style="background:var(--green);" onclick="applyScanAndSave()">💾 바로 저장</button>
         <button class="btn btn-ghost" onclick="resetScan()">✕ 처음부터</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:10px;">⚠️ OCR 인식값은 저장 전 반드시 확인하세요. 환산값은 표준 공식 기반 추정치입니다.</div>
@@ -797,6 +798,21 @@
   </div>
 </div>
 
+<!-- DERIVED MODAL: 환산 계산값 보기 -->
+<div class="edit-modal-bg" id="derivedModalBg">
+  <div class="edit-modal">
+    <div class="edit-modal-header">
+      <div class="edit-modal-title">📋 환산 계산값</div>
+      <button class="modal-close" onclick="closeDerivedModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;">✕</button>
+    </div>
+    <div id="derivedModalDate" style="font-size:13px;color:var(--muted);margin-bottom:12px;"></div>
+    <div id="derivedModalBody" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div class="form-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeDerivedModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast">저장되었습니다 ✓</div>
 
@@ -926,10 +942,10 @@ function buildRecord(prefix) {
   if (!date || isNaN(weight)) { toast('날짜와 체중은 필수입니다'); return null; }
   var s = loadSettings();
   var bmi = s.autoBMI && s.height ? calcBMI(weight, s.height) : null;
-  return {
+  var rec = {
     id: Date.now(),
-    date,
-    weight,
+    date: date,
+    weight: weight,
     fatPct:      parseFloat(document.getElementById(prefix+'-fat-pct').value) || null,
     fatKg:       parseFloat(document.getElementById(prefix+'-fat-kg').value) || null,
     muscle:      parseFloat(document.getElementById(prefix+'-muscle').value) || null,
@@ -942,6 +958,12 @@ function buildRecord(prefix) {
     bmi:         bmi ? parseFloat(bmi) : null,
     note:        document.getElementById(prefix+'-note').value || '',
   };
+  var derived = deriveValues(rec, s);
+  if (Object.keys(derived.sources).length > 0) {
+    rec._sources = derived.sources;
+    rec._derived = derived.values;
+  }
+  return rec;
 }
 function clearDemoIfActive() {
   if (localStorage.getItem('inbody_demo_active')) {
@@ -1153,6 +1175,7 @@ function renderHistory() {
       <td>${bmiS ? `<span class="tag ${bmiS.cls}">${bmiS.label}</span>` : '—'}</td>
       <td style="color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;">${r.note||'—'}</td>
       <td style="display:flex;gap:4px;">
+        ${(r._sources && Object.keys(r._sources).length > 0) ? `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="showDerivedModal(${r.id})" title="환산 계산값 보기">📋</button>` : ''}
         <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="openEditModal(${r.id})">✏️</button>
         <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="deleteRecord(${r.id})">🗑️</button>
       </td>
@@ -1882,6 +1905,11 @@ function applyScanResult(silent) {
   }
 }
 
+function applyScanAndSave() {
+  applyScanResult(true);
+  saveRecord();
+}
+
 // ── 초기화 (처음부터) ──────────────────────────
 function resetScan() {
   lastDataUrl = null;
@@ -1932,7 +1960,7 @@ function saveEditRecord() {
   var idx = records.findIndex(r => r.id === id);
   if (idx < 0) { toast('기록을 찾을 수 없습니다'); return; }
   var s = loadSettings();
-  records[idx] = Object.assign({}, records[idx], {
+  var updRec = Object.assign({}, records[idx], {
     date: date, weight: wt,
     fatPct:   gv('e-fat-pct'), fatKg:  gv('e-fat-kg'),
     muscle:   gv('e-muscle'),  skeletal:gv('e-skeletal'),
@@ -1942,6 +1970,12 @@ function saveEditRecord() {
     note:     document.getElementById('e-note').value || '',
     bmi:      (s.autoBMI && s.height) ? parseFloat(calcBMI(wt, s.height)) : records[idx].bmi,
   });
+  var derived2 = deriveValues(updRec, s);
+  if (Object.keys(derived2.sources).length > 0) {
+    updRec._sources = derived2.sources;
+    updRec._derived = derived2.values;
+  }
+  records[idx] = updRec;
   saveRecords(records);
   closeEditModal();
   toast('✓ 수정되었습니다');
@@ -1956,6 +1990,46 @@ function deleteFromEdit() {
   toast('삭제되었습니다');
   if (currentPage === 'history')   renderHistory();
   if (currentPage === 'dashboard') renderDashboard();
+}
+
+// ══════════════════════════════════════════════════
+// FEATURE: 환산 계산값 보기 모달
+// ══════════════════════════════════════════════════
+var derivedDefs = [
+  { key:'heightFromBMI', label:'앱 기준 키 역산',  unit:'cm'  },
+  { key:'fatKg',         label:'체지방량',          unit:'kg'  },
+  { key:'lbm',           label:'제지방량 (LBM)',    unit:'kg'  },
+  { key:'water',         label:'체수분량',          unit:'L'   },
+  { key:'skeletal',      label:'골격근량',          unit:'kg'  },
+  { key:'bmi',           label:'BMI (계산)',        unit:''    },
+  { key:'bmr',           label:'기초대사량',        unit:'kcal'},
+  { key:'waist',         label:'허리둘레 (추정)',   unit:'cm'  },
+  { key:'proteinKg',     label:'단백질량',          unit:'kg'  },
+  { key:'mineral',       label:'무기질량',          unit:'kg'  },
+];
+
+function showDerivedModal(id) {
+  var rec = loadRecords().find(function(r) { return r.id === id; });
+  if (!rec) return;
+  var sources = rec._sources || {};
+  var derived = rec._derived || {};
+  document.getElementById('derivedModalDate').textContent = formatDate(rec.date) + ' 측정 기록';
+  var items = derivedDefs.filter(function(f) { return derived[f.key] != null; });
+  if (items.length === 0) {
+    document.getElementById('derivedModalBody').innerHTML = '<div style="color:var(--muted);font-size:13px;">환산 계산값이 없습니다.</div>';
+  } else {
+    document.getElementById('derivedModalBody').innerHTML = items.map(function(f) {
+      return '<div class="derived-field scan-field">' +
+        '<div class="scan-field-label">' + f.label + '</div>' +
+        '<div class="scan-field-value">' + derived[f.key] + (f.unit ? ' ' + f.unit : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;">' + (sources[f.key] || '') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+  document.getElementById('derivedModalBg').classList.add('open');
+}
+function closeDerivedModal() {
+  document.getElementById('derivedModalBg').classList.remove('open');
 }
 
 // ══════════════════════════════════════════════════
@@ -2450,6 +2524,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── 수정 모달 배경 클릭 닫기 ──
   document.getElementById('editModalBg') && document.getElementById('editModalBg').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEditModal();
+  });
+  document.getElementById('derivedModalBg') && document.getElementById('derivedModalBg').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeDerivedModal();
   });
 
   setTodayDate();
