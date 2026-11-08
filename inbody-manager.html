@@ -1162,24 +1162,26 @@ function renderHistory() {
   var empty = document.getElementById('historyEmpty');
   if (records.length === 0) { tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  tbody.innerHTML = records.slice().reverse().map((r,i) => {
+  tbody.innerHTML = records.slice().reverse().map(function(r) {
     var bmi = r.bmi || (s.height ? calcBMI(r.weight, s.height) : null);
     var bmiS = bmiStatus(bmi);
-    return `<tr>
-      <td style="white-space:nowrap">${formatDate(r.date)}</td>
-      <td>${r.weight}</td>
-      <td>${(r.fatPct != null ? r.fatPct : '—')}</td>
-      <td>${(r.muscle != null ? r.muscle : '—')}</td>
-      <td>${(r.water != null ? r.water : '—')}</td>
-      <td>${(bmi != null ? bmi : '—')}</td>
-      <td>${bmiS ? `<span class="tag ${bmiS.cls}">${bmiS.label}</span>` : '—'}</td>
-      <td style="color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;">${r.note||'—'}</td>
-      <td style="display:flex;gap:4px;">
-        ${(r._sources && Object.keys(r._sources).length > 0) ? `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="showDerivedModal(${r.id})" title="환산 계산값 보기">📋</button>` : ''}
-        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="openEditModal(${r.id})">✏️</button>
-        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="deleteRecord(${r.id})">🗑️</button>
-      </td>
-    </tr>`;
+    var hasDerived = (r._sources && Object.keys(r._sources).length > 0) ||
+                     (Object.keys(deriveValues(r, s).sources).length > 0);
+    return '<tr>' +
+      '<td style="white-space:nowrap">' + formatDate(r.date) + '</td>' +
+      '<td>' + r.weight + '</td>' +
+      '<td>' + (r.fatPct != null ? r.fatPct : '—') + '</td>' +
+      '<td>' + (r.muscle != null ? r.muscle : '—') + '</td>' +
+      '<td>' + (r.water != null ? r.water : '—') + '</td>' +
+      '<td>' + (bmi != null ? bmi : '—') + '</td>' +
+      '<td>' + (bmiS ? '<span class="tag ' + bmiS.cls + '">' + bmiS.label + '</span>' : '—') + '</td>' +
+      '<td style="color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + (r.note||'—') + '</td>' +
+      '<td style="display:flex;gap:4px;">' +
+        (hasDerived ? '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="showDerivedModal(' + r.id + ')" title="환산 계산값 보기">📋</button>' : '') +
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="openEditModal(' + r.id + ')">✏️</button>' +
+        '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="deleteRecord(' + r.id + ')">🗑️</button>' +
+      '</td>' +
+    '</tr>';
   }).join('');
 }
 function deleteRecord(id) {
@@ -2011,8 +2013,9 @@ var derivedDefs = [
 function showDerivedModal(id) {
   var rec = loadRecords().find(function(r) { return r.id === id; });
   if (!rec) return;
-  var sources = rec._sources || {};
-  var derived = rec._derived || {};
+  var live = deriveValues(rec, loadSettings());
+  var sources = (rec._sources && Object.keys(rec._sources).length > 0) ? rec._sources : live.sources;
+  var derived = (rec._derived && Object.keys(rec._derived).length > 0) ? rec._derived : live.values;
   document.getElementById('derivedModalDate').textContent = formatDate(rec.date) + ' 측정 기록';
   var items = derivedDefs.filter(function(f) { return derived[f.key] != null; });
   if (items.length === 0) {
