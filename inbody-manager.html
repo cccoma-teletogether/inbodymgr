@@ -406,11 +406,11 @@
       </div>
       <div class="bmi-indicator">
         <div class="bmi-track">
-          <div class="bmi-seg" style="background:#3B82F6;"></div>
-          <div class="bmi-seg" style="background:#10B981;"></div>
-          <div class="bmi-seg" style="background:#10B981;"></div>
-          <div class="bmi-seg" style="background:#F59E0B;"></div>
-          <div class="bmi-seg" style="background:#EF4444;"></div>
+          <div class="bmi-seg" style="background:#3B82F6;flex:3.5"></div>
+          <div class="bmi-seg" style="background:#10B981;flex:6.5"></div>
+          <div class="bmi-seg" style="background:#F59E0B;flex:5"></div>
+          <div class="bmi-seg" style="background:#EF4444;flex:5"></div>
+          <div class="bmi-seg" style="background:#7C3AED;flex:5"></div>
         </div>
         <div class="bmi-needle" id="bmiNeedle"></div>
       </div>
@@ -910,10 +910,10 @@ function bmiStatus(bmi) {
   if (!bmi) return null;
   bmi = parseFloat(bmi);
   if (bmi < 18.5) return {label:'저체중', cls:'tag-warn'};
-  if (bmi < 23)   return {label:'정상',   cls:'tag-ok'};
-  if (bmi < 25)   return {label:'과체중', cls:'tag-warn'};
-  if (bmi < 30)   return {label:'비만',   cls:'tag-bad'};
-  return {label:'고도비만', cls:'tag-bad'};
+  if (bmi < 18.5) return {label:'저체중', cls:'tag-warn'};
+  if (bmi < 25)   return {label:'정상',   cls:'tag-ok'};
+  if (bmi < 30)   return {label:'과체중', cls:'tag-warn'};
+  if (bmi < 35)   return {label:'비만',   cls:'tag-bad'};
 }
 function toast(msg) {
   var el = document.getElementById('toast');
